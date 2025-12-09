@@ -251,34 +251,23 @@ show_status() {
   [[ -f "$SCRIPTS_DIR/db_restore.sh" ]] && print_success "Database restore script" || print_error "Database restore script"
   [[ -f "$SCRIPTS_DIR/files_restore.sh" ]] && print_success "Files restore script" || print_error "Files restore script"
   
-  # Check scheduled backups (systemd timers or cron)
+  # Check cron jobs
   echo
   echo "Scheduled Backups:"
-  
-  # Database backup schedule
-  if systemctl is-enabled backup-management-db.timer &>/dev/null; then
-    local db_schedule
-    db_schedule=$(grep -E "^OnCalendar=" /etc/systemd/system/backup-management-db.timer 2>/dev/null | cut -d'=' -f2)
-    print_success "Database backup (systemd): $db_schedule"
-  elif crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/db_backup.sh"; then
+  if crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/db_backup.sh"; then
     local db_schedule
     db_schedule=$(crontab -l 2>/dev/null | grep "$SCRIPTS_DIR/db_backup.sh" | awk '{print $1,$2,$3,$4,$5}')
-    print_success "Database backup (cron): $db_schedule"
+    print_success "Database backup cron: $db_schedule"
   else
-    print_warning "Database backup: NOT SCHEDULED"
+    print_warning "Database backup cron: NOT SCHEDULED"
   fi
   
-  # Files backup schedule
-  if systemctl is-enabled backup-management-files.timer &>/dev/null; then
-    local files_schedule
-    files_schedule=$(grep -E "^OnCalendar=" /etc/systemd/system/backup-management-files.timer 2>/dev/null | cut -d'=' -f2)
-    print_success "Files backup (systemd): $files_schedule"
-  elif crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/files_backup.sh"; then
+  if crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/files_backup.sh"; then
     local files_schedule
     files_schedule=$(crontab -l 2>/dev/null | grep "$SCRIPTS_DIR/files_backup.sh" | awk '{print $1,$2,$3,$4,$5}')
-    print_success "Files backup (cron): $files_schedule"
+    print_success "Files backup cron: $files_schedule"
   else
-    print_warning "Files backup: NOT SCHEDULED"
+    print_warning "Files backup cron: NOT SCHEDULED"
   fi
   
   # Check rclone
@@ -493,33 +482,18 @@ manage_schedules() {
   echo "Current Schedules:"
   echo
   
-  # Check systemd timers first, fall back to cron
-  if systemctl is-enabled backup-management-db.timer &>/dev/null; then
-    local db_schedule
-    db_schedule=$(systemctl show backup-management-db.timer --property=TimersCalendar 2>/dev/null | cut -d'=' -f2)
-    if [[ -z "$db_schedule" ]]; then
-      db_schedule=$(grep -E "^OnCalendar=" /etc/systemd/system/backup-management-db.timer 2>/dev/null | cut -d'=' -f2)
-    fi
-    print_success "Database (systemd): $db_schedule"
-  elif crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/db_backup.sh"; then
+  if crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/db_backup.sh"; then
     local db_schedule
     db_schedule=$(crontab -l 2>/dev/null | grep "$SCRIPTS_DIR/db_backup.sh" | awk '{print $1,$2,$3,$4,$5}')
-    print_success "Database (cron): $db_schedule"
+    print_success "Database: $db_schedule"
   else
     print_warning "Database: NOT SCHEDULED"
   fi
   
-  if systemctl is-enabled backup-management-files.timer &>/dev/null; then
-    local files_schedule
-    files_schedule=$(systemctl show backup-management-files.timer --property=TimersCalendar 2>/dev/null | cut -d'=' -f2)
-    if [[ -z "$files_schedule" ]]; then
-      files_schedule=$(grep -E "^OnCalendar=" /etc/systemd/system/backup-management-files.timer 2>/dev/null | cut -d'=' -f2)
-    fi
-    print_success "Files (systemd): $files_schedule"
-  elif crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/files_backup.sh"; then
+  if crontab -l 2>/dev/null | grep -q "$SCRIPTS_DIR/files_backup.sh"; then
     local files_schedule
     files_schedule=$(crontab -l 2>/dev/null | grep "$SCRIPTS_DIR/files_backup.sh" | awk '{print $1,$2,$3,$4,$5}')
-    print_success "Files (cron): $files_schedule"
+    print_success "Files: $files_schedule"
   else
     print_warning "Files: NOT SCHEDULED"
   fi
@@ -528,72 +502,59 @@ manage_schedules() {
   echo "Options:"
   echo "1. Set/change database backup schedule"
   echo "2. Set/change files backup schedule"
-  echo "3. Disable database backup schedule"
-  echo "4. Disable files backup schedule"
-  echo "5. View timer status"
-  echo "6. Back to main menu"
+  echo "3. Remove database backup schedule"
+  echo "4. Remove files backup schedule"
+  echo "5. Back to main menu"
   echo
-  read -p "Select option [1-6]: " schedule_choice
+  read -p "Select option [1-5]: " schedule_choice
   
   case "$schedule_choice" in
     1)
-      set_systemd_schedule "db" "Database"
+      set_cron_schedule "database" "$SCRIPTS_DIR/db_backup.sh"
       ;;
     2)
-      set_systemd_schedule "files" "Files"
+      set_cron_schedule "files" "$SCRIPTS_DIR/files_backup.sh"
       ;;
     3)
-      disable_schedule "db" "Database"
+      ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/db_backup.sh" ) | crontab -
+      print_success "Database backup schedule removed."
+      press_enter_to_continue
       ;;
     4)
-      disable_schedule "files" "Files"
+      ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/files_backup.sh" ) | crontab -
+      print_success "Files backup schedule removed."
+      press_enter_to_continue
       ;;
-    5)
-      view_timer_status
-      ;;
-    6|*)
+    5|*)
       return
       ;;
   esac
 }
 
-set_systemd_schedule() {
-  local timer_type="$1"
-  local display_name="$2"
-  local timer_name="backup-management-${timer_type}.timer"
-  local service_name="backup-management-${timer_type}.service"
+set_cron_schedule() {
+  local backup_type="$1"
+  local script_path="$2"
   
   echo
-  echo "Select schedule for $display_name backup:"
+  echo "Select schedule for $backup_type backup:"
   echo "1. Hourly"
   echo "2. Every 2 hours"
   echo "3. Every 6 hours"
-  echo "4. Daily at midnight"
-  echo "5. Daily at 3 AM (recommended for files)"
-  echo "6. Weekly (Sunday at midnight)"
-  echo "7. Custom schedule"
+  echo "4. Daily (at midnight)"
+  echo "5. Weekly (Sunday at midnight)"
+  echo "6. Custom cron expression"
   echo
-  read -p "Select option [1-7]: " freq_choice
+  read -p "Select option [1-6]: " freq_choice
   
-  local on_calendar
+  local cron_schedule
   case "$freq_choice" in
-    1) on_calendar="hourly" ;;
-    2) on_calendar="*-*-* 0/2:00:00" ;;
-    3) on_calendar="*-*-* 0/6:00:00" ;;
-    4) on_calendar="*-*-* 00:00:00" ;;
-    5) on_calendar="*-*-* 03:00:00" ;;
-    6) on_calendar="Sun *-*-* 00:00:00" ;;
-    7)
-      echo
-      echo "Enter systemd OnCalendar expression."
-      echo "Examples:"
-      echo "  hourly              - Every hour"
-      echo "  daily               - Every day at midnight"
-      echo "  *-*-* 03:00:00      - Every day at 3 AM"
-      echo "  Mon,Fri *-*-* 02:00 - Monday and Friday at 2 AM"
-      echo "  *-*-* *:0/30:00     - Every 30 minutes"
-      echo
-      read -p "OnCalendar: " on_calendar
+    1) cron_schedule="0 * * * *" ;;
+    2) cron_schedule="0 */2 * * *" ;;
+    3) cron_schedule="0 */6 * * *" ;;
+    4) cron_schedule="0 0 * * *" ;;
+    5) cron_schedule="0 0 * * 0" ;;
+    6)
+      read -p "Enter cron expression (e.g., '0 3 * * *' for 3 AM daily): " cron_schedule
       ;;
     *)
       print_error "Invalid selection."
@@ -602,98 +563,11 @@ set_systemd_schedule() {
       ;;
   esac
   
-  # Update the timer file
-  cat > "/etc/systemd/system/$timer_name" << EOF
-[Unit]
-Description=Backup Management - $display_name Backup Timer
-Requires=$service_name
-
-[Timer]
-OnCalendar=$on_calendar
-RandomizedDelaySec=300
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-  # Ensure service file exists
-  if [[ ! -f "/etc/systemd/system/$service_name" ]]; then
-    local script_path="$SCRIPTS_DIR/${timer_type}_backup.sh"
-    cat > "/etc/systemd/system/$service_name" << EOF
-[Unit]
-Description=Backup Management - $display_name Backup
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=$script_path
-StandardOutput=append:$INSTALL_DIR/logs/${timer_type}_logfile.log
-StandardError=append:$INSTALL_DIR/logs/${timer_type}_logfile.log
-Nice=10
-IOSchedulingClass=idle
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  fi
+  # Remove existing and add new
+  local cron_line="$cron_schedule /bin/bash \"$script_path\""
+  ( crontab -l 2>/dev/null | grep -Fv "$script_path"; echo "$cron_line" ) | crontab -
   
-  # Reload and enable
-  systemctl daemon-reload
-  systemctl enable "$timer_name" 2>/dev/null || true
-  systemctl start "$timer_name" 2>/dev/null || true
-  
-  # Remove any cron entries for this backup
-  if [[ "$timer_type" == "db" ]]; then
-    ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/db_backup.sh" ) | crontab - 2>/dev/null || true
-  else
-    ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/files_backup.sh" ) | crontab - 2>/dev/null || true
-  fi
-  
-  echo
-  print_success "$display_name backup schedule set: $on_calendar"
-  print_info "Timer enabled and started"
-  press_enter_to_continue
-}
-
-disable_schedule() {
-  local timer_type="$1"
-  local display_name="$2"
-  local timer_name="backup-management-${timer_type}.timer"
-  
-  # Disable systemd timer
-  systemctl stop "$timer_name" 2>/dev/null || true
-  systemctl disable "$timer_name" 2>/dev/null || true
-  
-  # Also remove cron entries
-  if [[ "$timer_type" == "db" ]]; then
-    ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/db_backup.sh" ) | crontab - 2>/dev/null || true
-  else
-    ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/files_backup.sh" ) | crontab - 2>/dev/null || true
-  fi
-  
-  print_success "$display_name backup schedule disabled."
-  press_enter_to_continue
-}
-
-view_timer_status() {
-  print_header
-  echo "Systemd Timer Status"
-  echo "===================="
-  echo
-  
-  echo -e "${CYAN}Database Backup Timer:${NC}"
-  systemctl status backup-management-db.timer --no-pager 2>/dev/null || echo "  Not installed or not running"
-  echo
-  
-  echo -e "${CYAN}Files Backup Timer:${NC}"
-  systemctl status backup-management-files.timer --no-pager 2>/dev/null || echo "  Not installed or not running"
-  echo
-  
-  echo -e "${CYAN}Next scheduled runs:${NC}"
-  systemctl list-timers backup-management-* --no-pager 2>/dev/null || echo "  No timers scheduled"
-  
+  print_success "Schedule set: $cron_schedule"
   press_enter_to_continue
 }
 
@@ -945,15 +819,15 @@ run_setup() {
   echo
   
   # ---------- Step 7: Schedule Backups ----------
-  echo "Step 7: Schedule Backups (systemd timers)"
-  echo "------------------------------------------"
+  echo "Step 7: Schedule Backups"
+  echo "------------------------"
   
   if [[ "$DO_DATABASE" == "true" ]]; then
     read -p "Schedule automatic database backups? (Y/n): " SCHEDULE_DB
     SCHEDULE_DB=${SCHEDULE_DB:-Y}
     
     if [[ "$SCHEDULE_DB" =~ ^[Yy]$ ]]; then
-      set_systemd_schedule "db" "Database"
+      set_cron_schedule "database" "$SCRIPTS_DIR/db_backup.sh"
     fi
   fi
   
@@ -962,7 +836,7 @@ run_setup() {
     SCHEDULE_FILES=${SCHEDULE_FILES:-Y}
     
     if [[ "$SCHEDULE_FILES" =~ ^[Yy]$ ]]; then
-      set_systemd_schedule "files" "Files"
+      set_cron_schedule "files" "$SCRIPTS_DIR/files_backup.sh"
     fi
   fi
   
@@ -978,9 +852,6 @@ run_setup() {
   print_success "Backup management system is ready."
   echo
   echo "You can now use 'backup-management' command from anywhere."
-  echo
-  echo "Systemd timers are managing your backup schedules."
-  echo "View status anytime with: systemctl list-timers backup-management-*"
   echo
   
   press_enter_to_continue
