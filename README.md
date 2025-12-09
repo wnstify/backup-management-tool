@@ -141,7 +141,7 @@ sudo apt update && sudo apt install pigz -y
 
 ```bash
 # Download the script
-curl -fsSL https://raw.githubusercontent.com/webnestify/backup-management/main/backup-management.sh -o backup-management.sh
+curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/backup-management.sh -o backup-management.sh
 
 # Make executable
 chmod +x backup-management.sh
@@ -450,7 +450,7 @@ See [DISCLAIMER.md](DISCLAIMER.md) for full details.
 ## Support
 
 - 🌐 Website: [webnestify.cloud](https://webnestify.cloud)
-- 🐛 Issues: [GitHub Issues](https://github.com/webnestify/backup-management/issues)
+- 🐛 Issues: [GitHub Issues](https://github.com/wnstify/backup-management-tool/issues)
 - 📖 Documentation: [USAGE.md](USAGE.md)
 
 ---

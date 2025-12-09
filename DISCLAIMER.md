@@ -186,7 +186,7 @@ By using this software, you acknowledge and accept:
 For questions about this disclaimer:
 
 - **Website:** [webnestify.cloud](https://webnestify.cloud)
-- **GitHub:** [github.com/webnestify/backup-management](https://github.com/webnestify/backup-management)
+- **GitHub:** [github.com/wnstify/backup-management-tool/](https://github.com/wnstify/backup-management-tool/)
 
 ---
 

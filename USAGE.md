@@ -693,7 +693,7 @@ tail -100 /etc/backup-management/logs/files_logfile.log
 
 1. Check the logs in `/etc/backup-management/logs/`
 2. Run `rclone` commands manually to test
-3. Review [GitHub Issues](https://github.com/webnestify/backup-management/issues)
+3. Review [GitHub Issues](https://github.com/wnstify/backup-management-tool/issues)
 4. Contact support at [webnestify.cloud](https://webnestify.cloud)
 
 ---
