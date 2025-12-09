@@ -15,7 +15,7 @@
 # ============================================================================
 set -euo pipefail
 
-VERSION="1.1.0"
+VERSION="1.1.1"
 AUTHOR="Webnestify"
 WEBSITE="https://webnestify.cloud"
 INSTALL_DIR="/etc/backup-management"
@@ -721,7 +721,7 @@ run_cleanup_now() {
   rclone_db_path="$(get_config_value 'RCLONE_DB_PATH')"
   rclone_files_path="$(get_config_value 'RCLONE_FILES_PATH')"
   
-  local cutoff_time cleanup_count=0
+  local cutoff_time cleanup_count=0 cleanup_errors=0
   cutoff_time=$(date -d "-$retention_minutes minutes" +%s 2>/dev/null || date -v-${retention_minutes}M +%s 2>/dev/null || echo 0)
   
   if [[ "$cutoff_time" -eq 0 ]]; then
@@ -739,17 +739,21 @@ run_cleanup_now() {
     echo "Checking database backups at $rclone_remote:$rclone_db_path..."
     while IFS= read -r remote_file; do
       [[ -z "$remote_file" ]] && continue
-      file_time=$(rclone lsl "$rclone_remote:$rclone_db_path/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
-      if [[ -n "$file_time" ]]; then
+      file_time=$(rclone lsl "$rclone_remote:$rclone_db_path/$remote_file" 2>&1 | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" && ! "$file_time" =~ ^ERROR ]]; then
         file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
         if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
           echo "  Deleting: $remote_file ($(date -d "@$file_epoch" +"%Y-%m-%d %H:%M" 2>/dev/null))"
-          if rclone delete "$rclone_remote:$rclone_db_path/$remote_file" 2>/dev/null; then
+          delete_output=$(rclone delete "$rclone_remote:$rclone_db_path/$remote_file" 2>&1)
+          if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+          else
+            print_error "  Failed to delete $remote_file: $delete_output"
+            ((cleanup_errors++)) || true
           fi
         fi
       fi
-    done < <(rclone lsf "$rclone_remote:$rclone_db_path" --include "*-db_backups-*.tar.gz.gpg" 2>/dev/null)
+    done < <(rclone lsf "$rclone_remote:$rclone_db_path" --include "*-db_backups-*.tar.gz.gpg" 2>&1)
   fi
   
   # Cleanup files backups
@@ -757,21 +761,29 @@ run_cleanup_now() {
     echo "Checking files backups at $rclone_remote:$rclone_files_path..."
     while IFS= read -r remote_file; do
       [[ -z "$remote_file" ]] && continue
-      file_time=$(rclone lsl "$rclone_remote:$rclone_files_path/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
-      if [[ -n "$file_time" ]]; then
+      file_time=$(rclone lsl "$rclone_remote:$rclone_files_path/$remote_file" 2>&1 | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" && ! "$file_time" =~ ^ERROR ]]; then
         file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
         if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
           echo "  Deleting: $remote_file ($(date -d "@$file_epoch" +"%Y-%m-%d %H:%M" 2>/dev/null))"
-          if rclone delete "$rclone_remote:$rclone_files_path/$remote_file" 2>/dev/null; then
+          delete_output=$(rclone delete "$rclone_remote:$rclone_files_path/$remote_file" 2>&1)
+          if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+          else
+            print_error "  Failed to delete $remote_file: $delete_output"
+            ((cleanup_errors++)) || true
           fi
         fi
       fi
-    done < <(rclone lsf "$rclone_remote:$rclone_files_path" --include "*.tar.gz" 2>/dev/null)
+    done < <(rclone lsf "$rclone_remote:$rclone_files_path" --include "*.tar.gz" 2>&1)
   fi
   
   echo
-  print_success "Cleanup complete. Removed $cleanup_count old backup(s)."
+  if [[ $cleanup_errors -gt 0 ]]; then
+    print_warning "Cleanup completed with $cleanup_errors error(s). Removed $cleanup_count old backup(s)."
+  else
+    print_success "Cleanup complete. Removed $cleanup_count old backup(s)."
+  fi
   press_enter_to_continue
 }
 
@@ -1735,6 +1747,7 @@ echo "Uploaded to $RCLONE_REMOTE:$RCLONE_PATH"
 if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
   echo "Running retention cleanup (keeping backups newer than $RETENTION_MINUTES minutes)..."
   cleanup_count=0
+  cleanup_errors=0
   cutoff_time=$(date -d "-$RETENTION_MINUTES minutes" +%s 2>/dev/null || date -v-${RETENTION_MINUTES}M +%s 2>/dev/null || echo 0)
   
   if [[ "$cutoff_time" -gt 0 ]]; then
@@ -1742,20 +1755,34 @@ if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
     while IFS= read -r remote_file; do
       [[ -z "$remote_file" ]] && continue
       # Get file modification time from rclone
-      file_time=$(rclone lsl "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
-      if [[ -n "$file_time" ]]; then
+      file_time=$(rclone lsl "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>&1 | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" && ! "$file_time" =~ ^ERROR ]]; then
         file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
         if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
           echo "  Deleting old backup: $remote_file"
-          if rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null; then
+          delete_output=$(rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>&1)
+          if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+          else
+            echo "  [ERROR] Failed to delete $remote_file: $delete_output"
+            ((cleanup_errors++)) || true
           fi
         fi
       fi
-    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*-db_backups-*.tar.gz.gpg" 2>/dev/null)
-    echo "Retention cleanup complete. Removed $cleanup_count old backup(s)."
+    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*-db_backups-*.tar.gz.gpg" 2>&1)
+    
+    if [[ $cleanup_errors -gt 0 ]]; then
+      echo "[WARNING] Retention cleanup completed with $cleanup_errors error(s). Removed $cleanup_count old backup(s)."
+      [[ -n "$NTFY_URL" ]] && send_notification "DB Retention Cleanup Warning on $HOSTNAME" "Removed: $cleanup_count, Errors: $cleanup_errors"
+    elif [[ $cleanup_count -gt 0 ]]; then
+      echo "Retention cleanup complete. Removed $cleanup_count old backup(s)."
+      [[ -n "$NTFY_URL" ]] && send_notification "DB Retention Cleanup on $HOSTNAME" "Removed $cleanup_count old backup(s)"
+    else
+      echo "Retention cleanup complete. No old backups to remove."
+    fi
   else
     echo "  [WARNING] Could not calculate cutoff time, skipping cleanup"
+    [[ -n "$NTFY_URL" ]] && send_notification "DB Retention Cleanup Failed on $HOSTNAME" "Could not calculate cutoff time"
   fi
 fi
 
@@ -2160,6 +2187,7 @@ fi
 if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
   echo "$LOG_PREFIX Running retention cleanup (keeping backups newer than $RETENTION_MINUTES minutes)..."
   cleanup_count=0
+  cleanup_errors=0
   cutoff_time=$(date -d "-$RETENTION_MINUTES minutes" +%s 2>/dev/null || date -v-${RETENTION_MINUTES}M +%s 2>/dev/null || echo 0)
   
   if [[ "$cutoff_time" -gt 0 ]]; then
@@ -2167,20 +2195,34 @@ if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
     while IFS= read -r remote_file; do
       [[ -z "$remote_file" ]] && continue
       # Get file modification time from rclone
-      file_time=$(rclone lsl "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
-      if [[ -n "$file_time" ]]; then
+      file_time=$(rclone lsl "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>&1 | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" && ! "$file_time" =~ ^ERROR ]]; then
         file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
         if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
           echo "$LOG_PREFIX   Deleting old backup: $remote_file"
-          if rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null; then
+          delete_output=$(rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>&1)
+          if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+          else
+            echo "$LOG_PREFIX   [ERROR] Failed to delete $remote_file: $delete_output"
+            ((cleanup_errors++)) || true
           fi
         fi
       fi
-    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" 2>/dev/null)
-    echo "$LOG_PREFIX Retention cleanup complete. Removed $cleanup_count old backup(s)."
+    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" 2>&1)
+    
+    if [[ $cleanup_errors -gt 0 ]]; then
+      echo "$LOG_PREFIX [WARNING] Retention cleanup completed with $cleanup_errors error(s). Removed $cleanup_count old backup(s)."
+      [[ -n "$NTFY_URL" ]] && send_notification "Files Retention Cleanup Warning on $HOSTNAME" "Removed: $cleanup_count, Errors: $cleanup_errors"
+    elif [[ $cleanup_count -gt 0 ]]; then
+      echo "$LOG_PREFIX Retention cleanup complete. Removed $cleanup_count old backup(s)."
+      [[ -n "$NTFY_URL" ]] && send_notification "Files Retention Cleanup on $HOSTNAME" "Removed $cleanup_count old backup(s)"
+    else
+      echo "$LOG_PREFIX Retention cleanup complete. No old backups to remove."
+    fi
   else
     echo "$LOG_PREFIX [WARNING] Could not calculate cutoff time, skipping cleanup"
+    [[ -n "$NTFY_URL" ]] && send_notification "Files Retention Cleanup Failed on $HOSTNAME" "Could not calculate cutoff time"
   fi
 fi
 
