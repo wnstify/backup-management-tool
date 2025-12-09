@@ -58,7 +58,7 @@ print_success() {
 }
 
 print_error() {
-  echo -e "${RED}✗ $1${NC}"
+  echo -e "${RED}✗ $1${NC}" >&2
 }
 
 print_warning() {
@@ -72,6 +72,223 @@ print_info() {
 press_enter_to_continue() {
   echo
   read -p "Press Enter to continue..."
+}
+
+# ---------- Input Validation Functions ----------
+
+# Validate path input - prevent shell injection
+validate_path() {
+  local path="$1"
+  local name="${2:-path}"
+  
+  # Check for empty
+  if [[ -z "$path" ]]; then
+    print_error "$name cannot be empty"
+    return 1
+  fi
+  
+  # Check for dangerous characters (shell metacharacters)
+  if [[ "$path" =~ [\'\"$\`\;\|\&\>\<\(\)\{\}\[\]\\] ]]; then
+    print_error "$name contains invalid characters"
+    return 1
+  fi
+  
+  # Check for path traversal attempts
+  if [[ "$path" =~ \.\. ]]; then
+    print_error "$name cannot contain '..'"
+    return 1
+  fi
+  
+  return 0
+}
+
+# Validate URL input
+validate_url() {
+  local url="$1"
+  local name="${2:-URL}"
+  
+  if [[ -z "$url" ]]; then
+    print_error "$name cannot be empty"
+    return 1
+  fi
+  
+  # Basic URL format check
+  if [[ ! "$url" =~ ^https?:// ]]; then
+    print_error "$name must start with http:// or https://"
+    return 1
+  fi
+  
+  # Check for dangerous characters
+  if [[ "$url" =~ [\'\"$\`\;\|\&\>\<\(\)\{\}\\] ]]; then
+    print_error "$name contains invalid characters"
+    return 1
+  fi
+  
+  return 0
+}
+
+# Validate password strength
+validate_password() {
+  local password="$1"
+  local min_length="${2:-8}"
+  
+  if [[ -z "$password" ]]; then
+    print_error "Password cannot be empty"
+    return 1
+  fi
+  
+  if [[ ${#password} -lt $min_length ]]; then
+    print_error "Password must be at least $min_length characters"
+    return 1
+  fi
+  
+  return 0
+}
+
+# Check available disk space (in MB)
+check_disk_space() {
+  local path="$1"
+  local required_mb="${2:-1000}"  # Default 1GB
+  
+  local available_mb
+  available_mb=$(df -m "$path" 2>/dev/null | awk 'NR==2 {print $4}')
+  
+  if [[ -z "$available_mb" ]]; then
+    print_warning "Could not check disk space"
+    return 0
+  fi
+  
+  if [[ "$available_mb" -lt "$required_mb" ]]; then
+    print_error "Insufficient disk space. Available: ${available_mb}MB, Required: ${required_mb}MB"
+    return 1
+  fi
+  
+  return 0
+}
+
+# Check network connectivity
+check_network() {
+  local host="${1:-1.1.1.1}"
+  local timeout="${2:-5}"
+  
+  if ! ping -c 1 -W "$timeout" "$host" &>/dev/null; then
+    if ! curl -s --connect-timeout "$timeout" "https://www.google.com" &>/dev/null; then
+      print_error "No network connectivity"
+      return 1
+    fi
+  fi
+  
+  return 0
+}
+
+# Create MySQL credentials file (more secure than command line)
+create_mysql_auth_file() {
+  local user="$1"
+  local pass="$2"
+  local auth_file
+  
+  auth_file="$(mktemp)"
+  chmod 600 "$auth_file"
+  
+  cat > "$auth_file" << EOF
+[client]
+user=$user
+password=$pass
+EOF
+  
+  echo "$auth_file"
+}
+
+# Lock file location (fixed, not in temp)
+LOCK_DIR="/var/lock"
+DB_LOCK_FILE="$LOCK_DIR/backup-management-db.lock"
+FILES_LOCK_FILE="$LOCK_DIR/backup-management-files.lock"
+
+# Maximum log file size (10MB)
+MAX_LOG_SIZE=$((10 * 1024 * 1024))
+
+# Rotate log file if it exceeds max size
+rotate_log() {
+  local log_file="$1"
+  local max_backups="${2:-5}"
+  
+  [[ ! -f "$log_file" ]] && return 0
+  
+  local log_size
+  log_size=$(stat -c%s "$log_file" 2>/dev/null || echo 0)
+  
+  if [[ "$log_size" -gt "$MAX_LOG_SIZE" ]]; then
+    # Remove oldest backup
+    [[ -f "${log_file}.${max_backups}" ]] && rm -f "${log_file}.${max_backups}"
+    
+    # Rotate existing backups
+    for ((i=max_backups-1; i>=1; i--)); do
+      [[ -f "${log_file}.${i}" ]] && mv "${log_file}.${i}" "${log_file}.$((i+1))"
+    done
+    
+    # Rotate current log
+    mv "$log_file" "${log_file}.1"
+    touch "$log_file"
+    chmod 600 "$log_file"
+  fi
+}
+
+# Secure temp directory creation (防止symlink attacks)
+create_secure_temp() {
+  local prefix="${1:-backup-mgmt}"
+  local temp_dir
+  
+  # Create temp dir with restricted permissions
+  temp_dir="$(mktemp -d -t "${prefix}.XXXXXXXXXX")"
+  
+  # Verify it's actually a directory and owned by us
+  if [[ ! -d "$temp_dir" ]] || [[ ! -O "$temp_dir" ]]; then
+    echo "Failed to create secure temp directory" >&2
+    return 1
+  fi
+  
+  # Set restrictive permissions
+  chmod 700 "$temp_dir"
+  
+  echo "$temp_dir"
+}
+
+# Verify file integrity (basic check)
+verify_file_integrity() {
+  local file="$1"
+  local expected_type="${2:-}"
+  
+  [[ ! -f "$file" ]] && return 1
+  [[ ! -s "$file" ]] && return 1  # Empty file
+  
+  case "$expected_type" in
+    gzip)
+      gzip -t "$file" 2>/dev/null || return 1
+      ;;
+    gpg)
+      file "$file" 2>/dev/null | grep -qi "gpg\|pgp\|encrypted" || return 1
+      ;;
+  esac
+  
+  return 0
+}
+
+# Safe file write (atomic)
+safe_write_file() {
+  local target="$1"
+  local content="$2"
+  local temp_file
+  
+  temp_file="$(mktemp "${target}.XXXXXXXXXX")"
+  
+  if echo "$content" > "$temp_file" 2>/dev/null; then
+    chmod 600 "$temp_file"
+    mv "$temp_file" "$target"
+    return 0
+  else
+    rm -f "$temp_file"
+    return 1
+  fi
 }
 
 # ---------- Secure Credential Storage Functions ----------
@@ -167,14 +384,22 @@ secret_exists() {
 
 lock_secrets() {
   local secrets_dir="$1"
-  chattr +i "$secrets_dir"/.* 2>/dev/null || true
+  # Only lock our specific secret files, not all files in directory
+  local secret_files=(".c1" ".c2" ".c3" ".c4" ".c5")
+  for f in "${secret_files[@]}"; do
+    [[ -f "$secrets_dir/$f" ]] && chattr +i "$secrets_dir/$f" 2>/dev/null || true
+  done
   chattr +i "$secrets_dir" 2>/dev/null || true
 }
 
 unlock_secrets() {
   local secrets_dir="$1"
   chattr -i "$secrets_dir" 2>/dev/null || true
-  chattr -i "$secrets_dir"/.* 2>/dev/null || true
+  # Only unlock our specific secret files, not all files in directory
+  local secret_files=(".c1" ".c2" ".c3" ".c4" ".c5")
+  for f in "${secret_files[@]}"; do
+    [[ -f "$secrets_dir/$f" ]] && chattr -i "$secrets_dir/$f" 2>/dev/null || true
+  done
 }
 
 # Secret file names (obscured)
@@ -200,6 +425,17 @@ get_config_value() {
 save_config() {
   local key="$1"
   local value="$2"
+  
+  # Validate key (alphanumeric and underscore only)
+  if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    print_error "Invalid config key: $key"
+    return 1
+  fi
+  
+  # Escape double quotes and backslashes in value to prevent injection
+  value="${value//\\/\\\\}"  # Escape backslashes first
+  value="${value//\"/\\\"}"  # Escape double quotes
+  value="${value//$'\n'/}"   # Remove newlines
   
   if [[ -f "$CONFIG_FILE" ]]; then
     # Remove existing key if present
@@ -768,6 +1004,8 @@ run_setup() {
   echo "Step 2: Encryption Password"
   echo "---------------------------"
   echo "Your backups will be encrypted with AES-256."
+  echo "Password must be at least 8 characters."
+  echo
   read -sp "Enter encryption password: " ENCRYPTION_PASSWORD
   echo
   read -sp "Confirm encryption password: " ENCRYPTION_PASSWORD_CONFIRM
@@ -779,8 +1017,7 @@ run_setup() {
     return
   fi
   
-  if [[ -z "$ENCRYPTION_PASSWORD" ]]; then
-    print_error "Password cannot be empty. Please restart setup."
+  if ! validate_password "$ENCRYPTION_PASSWORD" 8; then
     press_enter_to_continue
     return
   fi
@@ -902,6 +1139,10 @@ run_setup() {
   # Database path
   if [[ "$DO_DATABASE" == "true" ]]; then
     read -p "Enter path for database backups (e.g., backups/db): " RCLONE_DB_PATH
+    if ! validate_path "$RCLONE_DB_PATH" "Database backup path"; then
+      press_enter_to_continue
+      return
+    fi
     save_config "RCLONE_DB_PATH" "$RCLONE_DB_PATH"
     print_success "Database backups: $RCLONE_REMOTE:$RCLONE_DB_PATH"
   fi
@@ -909,6 +1150,10 @@ run_setup() {
   # Files path
   if [[ "$DO_FILES" == "true" ]]; then
     read -p "Enter path for files backups (e.g., backups/files): " RCLONE_FILES_PATH
+    if ! validate_path "$RCLONE_FILES_PATH" "Files backup path"; then
+      press_enter_to_continue
+      return
+    fi
     save_config "RCLONE_FILES_PATH" "$RCLONE_FILES_PATH"
     print_success "Files backups: $RCLONE_REMOTE:$RCLONE_FILES_PATH"
   fi
@@ -922,16 +1167,20 @@ run_setup() {
   
   if [[ "$SETUP_NTFY" =~ ^[Yy]$ ]]; then
     read -p "Enter ntfy topic URL (e.g., https://ntfy.sh/mytopic): " NTFY_URL
-    store_secret "$SECRETS_DIR" "$SECRET_NTFY_URL" "$NTFY_URL"
-    
-    read -p "Do you have an ntfy auth token? (y/N): " HAS_NTFY_TOKEN
-    if [[ "$HAS_NTFY_TOKEN" =~ ^[Yy]$ ]]; then
-      read -sp "Enter ntfy token: " NTFY_TOKEN
-      echo
-      store_secret "$SECRETS_DIR" "$SECRET_NTFY_TOKEN" "$NTFY_TOKEN"
+    if ! validate_url "$NTFY_URL" "ntfy URL"; then
+      print_warning "Skipping notifications due to invalid URL"
+    else
+      store_secret "$SECRETS_DIR" "$SECRET_NTFY_URL" "$NTFY_URL"
+      
+      read -p "Do you have an ntfy auth token? (y/N): " HAS_NTFY_TOKEN
+      if [[ "$HAS_NTFY_TOKEN" =~ ^[Yy]$ ]]; then
+        read -sp "Enter ntfy token: " NTFY_TOKEN
+        echo
+        store_secret "$SECRETS_DIR" "$SECRET_NTFY_TOKEN" "$NTFY_TOKEN"
+      fi
+      
+      print_success "Notifications configured."
     fi
-    
-    print_success "Notifications configured."
   fi
   echo
   
@@ -1037,11 +1286,25 @@ RCLONE_PATH="%%RCLONE_PATH%%"
 SECRETS_DIR="%%SECRETS_DIR%%"
 HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
 
+# Lock file in fixed location
+LOCK_FILE="/var/lock/backup-management-db.lock"
+
 SECRET_PASSPHRASE=".c1"
 SECRET_DB_USER=".c2"
 SECRET_DB_PASS=".c3"
 SECRET_NTFY_TOKEN=".c4"
 SECRET_NTFY_URL=".c5"
+
+# Cleanup function
+TEMP_DIR=""
+MYSQL_AUTH_FILE=""
+cleanup() {
+  local exit_code=$?
+  [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]] && rm -rf "$TEMP_DIR"
+  [[ -n "$MYSQL_AUTH_FILE" && -f "$MYSQL_AUTH_FILE" ]] && rm -f "$MYSQL_AUTH_FILE"
+  exit $exit_code
+}
+trap cleanup EXIT INT TERM
 
 derive_key() {
   local secrets_dir="$1"
@@ -1064,22 +1327,47 @@ get_secret() {
   openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -d -salt -pass "pass:$key" -base64 -in "$secrets_dir/$secret_name" 2>/dev/null || echo ""
 }
 
-# Lock file
-TEMP_DIR="$(mktemp -d)"
-trap "rm -rf '$TEMP_DIR'" EXIT
-exec 9> "$TEMP_DIR/.db_backup.lock"
+# Acquire lock (fixed location so it works across runs)
+exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "[INFO] Another database backup is running. Exiting."
   exit 0
 fi
 
-# Logging
+# Create temp directory
+TEMP_DIR="$(mktemp -d)"
+
+# Log rotation function
+rotate_log() {
+  local log_file="$1"
+  local max_size=$((10 * 1024 * 1024))  # 10MB
+  [[ ! -f "$log_file" ]] && return 0
+  local log_size
+  log_size=$(stat -c%s "$log_file" 2>/dev/null || echo 0)
+  if [[ "$log_size" -gt "$max_size" ]]; then
+    [[ -f "${log_file}.5" ]] && rm -f "${log_file}.5"
+    for ((i=4; i>=1; i--)); do
+      [[ -f "${log_file}.${i}" ]] && mv "${log_file}.${i}" "${log_file}.$((i+1))"
+    done
+    mv "$log_file" "${log_file}.1"
+  fi
+}
+
+# Logging with rotation
 STAMP="$(date +%F-%H%M)"
 LOG="$LOGS_DIR/db_logfile.log"
 mkdir -p "$LOGS_DIR"
+rotate_log "$LOG"
 touch "$LOG" && chmod 600 "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 echo "==== $(date +%F' '%T) START per-db backup ===="
+
+# Check disk space (need at least 1GB free in temp)
+AVAIL_MB=$(df -m /tmp 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+if [[ "$AVAIL_MB" -lt 1000 ]]; then
+  echo "[ERROR] Insufficient disk space in /tmp (${AVAIL_MB}MB available, 1000MB required)"
+  exit 3
+fi
 
 # Get secrets
 PASSPHRASE="$(get_secret "$SECRETS_DIR" "$SECRET_PASSPHRASE")"
@@ -1091,10 +1379,11 @@ NTFY_TOKEN="$(get_secret "$SECRETS_DIR" "$SECRET_NTFY_TOKEN" || echo "")"
 send_notification() {
   local title="$1" message="$2"
   [[ -z "$NTFY_URL" ]] && return 0
+  # Timeout for notification
   if [[ -n "$NTFY_TOKEN" ]]; then
-    curl -s -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null || true
+    timeout 10 curl -s -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null 2>&1 || true
   else
-    curl -s -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null || true
+    timeout 10 curl -s -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null 2>&1 || true
   fi
 }
 
@@ -1116,53 +1405,93 @@ else
   echo "[ERROR] No database client found"; exit 5
 fi
 
+# Get DB credentials and create auth file (more secure than command line)
 DB_USER="$(get_secret "$SECRETS_DIR" "$SECRET_DB_USER" || echo "")"
 DB_PASS="$(get_secret "$SECRETS_DIR" "$SECRET_DB_PASS" || echo "")"
 MYSQL_ARGS=()
-[[ -n "$DB_USER" && -n "$DB_PASS" ]] && MYSQL_ARGS+=("-u" "$DB_USER" "-p$DB_PASS")
+
+if [[ -n "$DB_USER" && -n "$DB_PASS" ]]; then
+  # Use defaults-extra-file to hide password from process list
+  MYSQL_AUTH_FILE="$(mktemp)"
+  chmod 600 "$MYSQL_AUTH_FILE"
+  cat > "$MYSQL_AUTH_FILE" << AUTHEOF
+[client]
+user=$DB_USER
+password=$DB_PASS
+AUTHEOF
+  MYSQL_ARGS=("--defaults-extra-file=$MYSQL_AUTH_FILE")
+fi
 
 EXCLUDE_REGEX='^(information_schema|performance_schema|sys|mysql)$'
 DBS="$($DB_CLIENT "${MYSQL_ARGS[@]}" -NBe 'SHOW DATABASES' 2>/dev/null | grep -Ev "$EXCLUDE_REGEX" || true)"
+
+if [[ -z "$DBS" ]]; then
+  echo "[ERROR] No databases found or cannot connect to database"
+  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Failed on $HOSTNAME" "No databases found"
+  exit 6
+fi
 
 DEST="$TEMP_DIR/$STAMP"
 mkdir -p "$DEST"
 
 declare -a failures=()
+db_count=0
 for db in $DBS; do
   echo "  → Dumping: $db"
   if "$DB_DUMP" "${MYSQL_ARGS[@]}" --databases "$db" --single-transaction --quick \
       --routines --events --triggers --hex-blob --default-character-set=utf8mb4 \
-      | $COMPRESSOR > "$DEST/${db}-${STAMP}.sql.gz"; then
+      2>/dev/null | $COMPRESSOR > "$DEST/${db}-${STAMP}.sql.gz"; then
     echo "    OK: $db"
+    ((db_count++)) || true
   else
     echo "    FAILED: $db"
     failures+=("$db")
   fi
 done
 
+if [[ $db_count -eq 0 ]]; then
+  echo "[ERROR] All database dumps failed"
+  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Failed on $HOSTNAME" "All dumps failed"
+  exit 7
+fi
+
 # Archive + encrypt
 ARCHIVE="$TEMP_DIR/${HOSTNAME}-db_backups-${STAMP}.tar.gz.gpg"
+echo "Creating encrypted archive..."
 tar -C "$TEMP_DIR" -cf - "$STAMP" | $COMPRESSOR | \
   gpg --batch --yes --pinentry-mode=loopback --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "$ARCHIVE"
 
-# Verify
-if gpg --batch --quiet --pinentry-mode=loopback --passphrase "$PASSPHRASE" -d "$ARCHIVE" | tar -tzf - >/dev/null; then
-  echo "Archive verified."
-  rclone copy "$ARCHIVE" "$RCLONE_REMOTE:$RCLONE_PATH"
-  rclone check "$(dirname "$ARCHIVE")" "$RCLONE_REMOTE:$RCLONE_PATH" --one-way --size-only --include "$(basename "$ARCHIVE")"
-  echo "Uploaded to $RCLONE_REMOTE:$RCLONE_PATH"
-else
+# Verify archive
+echo "Verifying archive..."
+if ! gpg --batch --quiet --pinentry-mode=loopback --passphrase "$PASSPHRASE" -d "$ARCHIVE" 2>/dev/null | tar -tzf - >/dev/null 2>&1; then
   echo "[ERROR] Archive verification failed"
-  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Failed on $HOSTNAME" "Verification failed"
+  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Failed on $HOSTNAME" "Archive verification failed"
   exit 4
 fi
+echo "Archive verified."
+
+# Upload with timeout and retry
+echo "Uploading to remote storage..."
+RCLONE_TIMEOUT=1800  # 30 minutes
+if ! timeout $RCLONE_TIMEOUT rclone copy "$ARCHIVE" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 --low-level-retries 10; then
+  echo "[ERROR] Upload failed"
+  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Failed on $HOSTNAME" "Upload failed"
+  exit 8
+fi
+
+# Verify upload
+if ! timeout 60 rclone check "$(dirname "$ARCHIVE")" "$RCLONE_REMOTE:$RCLONE_PATH" --one-way --size-only --include "$(basename "$ARCHIVE")" 2>/dev/null; then
+  echo "[WARNING] Upload verification could not complete, but upload may have succeeded"
+fi
+
+echo "Uploaded to $RCLONE_REMOTE:$RCLONE_PATH"
 
 if ((${#failures[@]})); then
-  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Completed with Errors on $HOSTNAME" "Failures: ${failures[*]}"
+  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Completed with Errors on $HOSTNAME" "Backed up: $db_count, Failed: ${failures[*]}"
   echo "==== $(date +%F' '%T) END (with errors) ===="
   exit 1
 else
-  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Successful on $HOSTNAME" "All databases backed up"
+  [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Successful on $HOSTNAME" "All $db_count databases backed up"
   echo "==== $(date +%F' '%T) END (success) ===="
 fi
 DBBACKUPEOF
@@ -1187,11 +1516,15 @@ generate_db_restore_script() {
   cat > "$SCRIPTS_DIR/db_restore.sh" << 'DBRESTOREEOF'
 #!/usr/bin/env bash
 set -uo pipefail
+umask 077
 
 RCLONE_REMOTE="%%RCLONE_REMOTE%%"
 RCLONE_PATH="%%RCLONE_PATH%%"
 SECRETS_DIR="%%SECRETS_DIR%%"
 LOG_PREFIX="[DB-RESTORE]"
+
+# Use same lock as backup to prevent conflicts
+LOCK_FILE="/var/lock/backup-management-db.lock"
 
 SECRET_DB_USER=".c2"
 SECRET_DB_PASS=".c3"
@@ -1212,6 +1545,14 @@ get_secret() {
   openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -d -salt -pass "pass:$key" -base64 -in "$secrets_dir/$secret_name" 2>/dev/null || echo ""
 }
 
+# Acquire lock (wait up to 60 seconds if backup is running)
+exec 9>"$LOCK_FILE"
+if ! flock -w 60 9; then
+  echo "$LOG_PREFIX ERROR: Could not acquire lock. A backup may be running."
+  echo "$LOG_PREFIX Please wait for the backup to complete and try again."
+  exit 1
+fi
+
 echo "========================================================"
 echo "           Database Restore Utility"
 echo "========================================================"
@@ -1222,13 +1563,30 @@ if command -v mariadb >/dev/null 2>&1; then DB_CLIENT="mariadb"
 elif command -v mysql >/dev/null 2>&1; then DB_CLIENT="mysql"
 else echo "$LOG_PREFIX ERROR: No database client found."; exit 1; fi
 
+# Get DB credentials and create auth file (more secure than command line)
 DB_USER="$(get_secret "$SECRETS_DIR" "$SECRET_DB_USER" || echo "")"
 DB_PASS="$(get_secret "$SECRETS_DIR" "$SECRET_DB_PASS" || echo "")"
 MYSQL_ARGS=()
-[[ -n "$DB_USER" && -n "$DB_PASS" ]] && MYSQL_ARGS+=("-u" "$DB_USER" "-p$DB_PASS")
+MYSQL_AUTH_FILE=""
+
+if [[ -n "$DB_USER" && -n "$DB_PASS" ]]; then
+  MYSQL_AUTH_FILE="$(mktemp)"
+  chmod 600 "$MYSQL_AUTH_FILE"
+  cat > "$MYSQL_AUTH_FILE" << AUTHEOF
+[client]
+user=$DB_USER
+password=$DB_PASS
+AUTHEOF
+  MYSQL_ARGS=("--defaults-extra-file=$MYSQL_AUTH_FILE")
+fi
+
+# Cleanup function
+cleanup_restore() {
+  [[ -n "$MYSQL_AUTH_FILE" && -f "$MYSQL_AUTH_FILE" ]] && rm -f "$MYSQL_AUTH_FILE"
+}
 
 TEMP_DIR="$(mktemp -d)"
-trap "rm -rf '$TEMP_DIR'" EXIT
+trap "rm -rf '$TEMP_DIR'; cleanup_restore" EXIT
 
 echo "Step 1: Encryption Password"
 echo "----------------------------"
@@ -1346,8 +1704,20 @@ HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
 LOG_PREFIX="[FILES-BACKUP]"
 WWW_DIR="/var/www"
 
+# Lock file in fixed location
+LOCK_FILE="/var/lock/backup-management-files.lock"
+
 SECRET_NTFY_TOKEN=".c4"
 SECRET_NTFY_URL=".c5"
+
+# Cleanup function
+TEMP_DIR=""
+cleanup() {
+  local exit_code=$?
+  [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]] && rm -rf "$TEMP_DIR"
+  exit $exit_code
+}
+trap cleanup EXIT INT TERM
 
 derive_key() {
   local secrets_dir="$1" machine_id salt
@@ -1365,20 +1735,46 @@ get_secret() {
   openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -d -salt -pass "pass:$key" -base64 -in "$secrets_dir/$secret_name" 2>/dev/null || echo ""
 }
 
-TEMP_DIR="$(mktemp -d)"
-trap "rm -rf '$TEMP_DIR'" EXIT
-exec 9> "$TEMP_DIR/.files_backup.lock"
+# Acquire lock (fixed location)
+exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo "$LOG_PREFIX Another backup running. Exiting."
   exit 0
 fi
 
+# Create temp directory
+TEMP_DIR="$(mktemp -d)"
+
+# Log rotation function
+rotate_log() {
+  local log_file="$1"
+  local max_size=$((10 * 1024 * 1024))  # 10MB
+  [[ ! -f "$log_file" ]] && return 0
+  local log_size
+  log_size=$(stat -c%s "$log_file" 2>/dev/null || echo 0)
+  if [[ "$log_size" -gt "$max_size" ]]; then
+    [[ -f "${log_file}.5" ]] && rm -f "${log_file}.5"
+    for ((i=4; i>=1; i--)); do
+      [[ -f "${log_file}.${i}" ]] && mv "${log_file}.${i}" "${log_file}.$((i+1))"
+    done
+    mv "$log_file" "${log_file}.1"
+  fi
+}
+
 STAMP="$(date +%F-%H%M)"
 LOG="$LOGS_DIR/files_logfile.log"
 mkdir -p "$LOGS_DIR"
+rotate_log "$LOG"
 touch "$LOG" && chmod 600 "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 echo "==== $(date +%F' '%T) START files backup ===="
+
+# Check disk space (need at least 2GB free in temp)
+AVAIL_MB=$(df -m /tmp 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+if [[ "$AVAIL_MB" -lt 2000 ]]; then
+  echo "$LOG_PREFIX [ERROR] Insufficient disk space in /tmp (${AVAIL_MB}MB available, 2000MB required)"
+  exit 3
+fi
 
 NTFY_URL="$(get_secret "$SECRETS_DIR" "$SECRET_NTFY_URL" || echo "")"
 NTFY_TOKEN="$(get_secret "$SECRETS_DIR" "$SECRET_NTFY_TOKEN" || echo "")"
@@ -1387,9 +1783,9 @@ send_notification() {
   local title="$1" message="$2"
   [[ -z "$NTFY_URL" ]] && return 0
   if [[ -n "$NTFY_TOKEN" ]]; then
-    curl -s -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null || true
+    timeout 10 curl -s -H "Authorization: Bearer $NTFY_TOKEN" -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null 2>&1 || true
   else
-    curl -s -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null || true
+    timeout 10 curl -s -H "Title: $title" -d "$message" "$NTFY_URL" >/dev/null 2>&1 || true
   fi
 }
 
@@ -1421,8 +1817,17 @@ get_wp_site_url() {
 }
 
 echo "$LOG_PREFIX Scanning $WWW_DIR..."
+
+# Check if WWW_DIR exists
+if [[ ! -d "$WWW_DIR" ]]; then
+  echo "$LOG_PREFIX [ERROR] $WWW_DIR does not exist"
+  [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Failed on $HOSTNAME" "$WWW_DIR not found"
+  exit 4
+fi
+
 declare -a failures=()
 success_count=0
+site_count=0
 
 for site_path in "$WWW_DIR"/*/; do
   [[ ! -d "$site_path" ]] && continue
@@ -1438,6 +1843,8 @@ for site_path in "$WWW_DIR"/*/; do
     continue
   fi
   
+  ((site_count++)) || true
+  
   owner="$(stat -c '%U' "$site_path" 2>/dev/null || echo "www-data")"
   site_url="$(get_wp_site_url "$owner" "$wp_root")"
   base_name="$(sanitize_for_filename "$site_url")"
@@ -1450,20 +1857,31 @@ for site_path in "$WWW_DIR"/*/; do
     tar_status=$?
   fi
   
-  [[ $tar_status -gt 1 ]] && { failures+=("$site_name"); continue; }
-  [[ ! -f "$archive_path" ]] && { failures+=("$site_name"); continue; }
+  # tar exit code 1 = files changed during archive (acceptable)
+  # tar exit code > 1 = actual error
+  [[ $tar_status -gt 1 ]] && { echo "$LOG_PREFIX [$site_name] Archive failed"; failures+=("$site_name"); continue; }
+  [[ ! -f "$archive_path" ]] && { echo "$LOG_PREFIX [$site_name] Archive file not created"; failures+=("$site_name"); continue; }
   
   echo "$LOG_PREFIX [$site_name] Uploading..."
-  if rclone copy "$archive_path" "$RCLONE_REMOTE:$RCLONE_PATH"; then
+  if timeout 3600 rclone copy "$archive_path" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 --low-level-retries 10; then
     rm -f "$archive_path"
     ((success_count++)) || true
+    echo "$LOG_PREFIX [$site_name] Done"
   else
+    echo "$LOG_PREFIX [$site_name] Upload failed"
     failures+=("$site_name")
   fi
 done
 
+if [[ $site_count -eq 0 ]]; then
+  echo "$LOG_PREFIX [WARNING] No sites found in $WWW_DIR"
+  [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Warning on $HOSTNAME" "No sites found"
+  echo "==== $(date +%F' '%T) END (no sites) ===="
+  exit 0
+fi
+
 if [[ ${#failures[@]} -gt 0 ]]; then
-  [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Errors on $HOSTNAME" "Failed: ${failures[*]}"
+  [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Errors on $HOSTNAME" "Success: $success_count, Failed: ${failures[*]}"
   echo "==== $(date +%F' '%T) END (with errors) ===="
   exit 1
 else
@@ -1491,11 +1909,23 @@ generate_files_restore_script() {
   cat > "$SCRIPTS_DIR/files_restore.sh" << 'FILESRESTOREEOF'
 #!/usr/bin/env bash
 set -uo pipefail
+umask 077
 
 RCLONE_REMOTE="%%RCLONE_REMOTE%%"
 RCLONE_PATH="%%RCLONE_PATH%%"
 LOG_PREFIX="[FILES-RESTORE]"
 WWW_DIR="/var/www"
+
+# Use same lock as backup to prevent conflicts
+LOCK_FILE="/var/lock/backup-management-files.lock"
+
+# Acquire lock (wait up to 60 seconds if backup is running)
+exec 9>"$LOCK_FILE"
+if ! flock -w 60 9; then
+  echo "$LOG_PREFIX ERROR: Could not acquire lock. A backup may be running."
+  echo "$LOG_PREFIX Please wait for the backup to complete and try again."
+  exit 1
+fi
 
 echo "========================================================"
 echo "           Files Restore Utility"
@@ -1567,6 +1997,8 @@ read -p "This will OVERWRITE existing sites. Continue? (yes/no): " confirm
 
 for site in "${SELECTED_SITES[@]}"; do
   echo "Restoring: $site"
+  backup_name=""  # Reset for each iteration
+  
   if [[ -d "$WWW_DIR/$site" ]]; then
     backup_name="${site}.pre-restore-$(date +%Y%m%d-%H%M%S)"
     mv "$WWW_DIR/$site" "$WWW_DIR/$backup_name"
@@ -1574,10 +2006,12 @@ for site in "${SELECTED_SITES[@]}"; do
   
   if tar -xzf "$BACKUP_FILE" -C "$WWW_DIR" "$site" 2>/dev/null; then
     echo "  ✓ Success"
-    [[ -d "$WWW_DIR/$backup_name" ]] && rm -rf "$WWW_DIR/$backup_name"
+    # Only remove backup if we created one and restore succeeded
+    [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && rm -rf "$WWW_DIR/$backup_name"
   else
     echo "  ✗ Failed"
-    [[ -d "$WWW_DIR/$backup_name" ]] && mv "$WWW_DIR/$backup_name" "$WWW_DIR/$site"
+    # Restore the backup if we made one
+    [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && mv "$WWW_DIR/$backup_name" "$WWW_DIR/$site"
   fi
 done
 
