@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.1] - 2024-12-09
+
+### Added
+
+- **Retention Cleanup Notifications**
+  - Push notification when old backups are removed
+  - Warning notification if cleanup encounters errors
+  - Failure notification if cutoff time calculation fails
+  - Notifications sent via ntfy (if configured)
+
+### Changed
+
+- Retention cleanup now reports "No old backups to remove" when nothing to clean
+- Notifications include count of removed backups and errors
+
+---
+
 ## [1.1.0] - 2024-12-09
 
 ### Added
@@ -26,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic log rotation at 10MB
   - Keeps 5 backup log files
   - Prevents disk space issues from growing logs
+
+- **Retention Error Logging**
+  - Cleanup errors now logged instead of silently ignored
+  - Shows specific error messages from rclone
+  - Summary shows both success count and error count
 
 - **Run Cleanup Now**
   - Manual trigger for retention cleanup
@@ -116,6 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.1.1 | 2024-12-09 | Retention cleanup notifications |
 | 1.1.0 | 2024-12-09 | Retention policy, security hardening, log rotation |
 | 1.0.0 | 2024-12-08 | Initial release |
 
