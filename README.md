@@ -79,46 +79,6 @@ sudo backup-management
 
 That's it! The wizard will guide you through configuration.
 
-### Dedicated User Setup (Recommended)
-
-During installation, you'll be asked if you want to create a dedicated backup user. This is recommended for better security:
-
-```
-Create dedicated backup user? (Y/n): Y
-```
-
-**What this does:**
-- Creates a system user `backupmgr`
-- Grants sudo access only for backup-related commands
-- Systemd timers run as this user (not root)
-- All sudo executions are logged for audit
-
-**After installation with dedicated user:**
-
-```bash
-# Use the shortcut wrapper
-backup-management-as-user
-
-# Or run manually
-sudo -u backupmgr sudo backup-management
-```
-
-**Manual Setup (if you skipped during install):**
-
-```bash
-# Create user
-sudo useradd -r -s /bin/bash -m -d /var/lib/backupmgr backupmgr
-
-# Create sudoers file
-sudo tee /etc/sudoers.d/backupmgr << 'EOF'
-backupmgr ALL=(root) NOPASSWD: /usr/local/bin/backup-management
-backupmgr ALL=(root) NOPASSWD: /etc/backup-management/scripts/*.sh
-backupmgr ALL=(root) NOPASSWD: /usr/bin/systemctl * backup-management-*
-EOF
-
-sudo chmod 440 /etc/sudoers.d/backupmgr
-```
-
 ---
 
 ## Requirements
