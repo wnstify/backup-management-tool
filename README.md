@@ -10,6 +10,34 @@ A secure, automated backup solution for WordPress sites and MySQL/MariaDB databa
 
 ---
 
+## Overview
+
+This tool provides a complete backup solution for WordPress hosting environments:
+
+1. **Database Backups** — Dumps all MySQL/MariaDB databases, compresses with pigz, encrypts with GPG, uploads to cloud storage
+2. **File Backups** — Archives WordPress sites from `/var/www/`, compresses, uploads to cloud storage
+3. **Secure Credential Storage** — All credentials (database, cloud storage) are encrypted with AES-256 and bound to your server's machine-id
+4. **Automated Scheduling** — Uses systemd timers for reliable, automatic backups with retry on failure
+5. **Easy Restore** — Interactive wizard to browse and restore from any backup point
+6. **Notifications** — Optional push notifications via ntfy.sh for backup status alerts
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Your Server                              │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐  │
+│  │ Database │───▶│ Compress │───▶│ Encrypt  │───▶│  Upload  │──┼──▶ Cloud Storage
+│  │  Dump    │    │  (pigz)  │    │  (GPG)   │    │ (rclone) │  │    (S3/B2/etc)
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘  │
+│                                                                 │
+│  ┌──────────┐    ┌──────────┐                    ┌──────────┐  │
+│  │   WP     │───▶│ Compress │───────────────────▶│  Upload  │──┼──▶ Cloud Storage
+│  │  Sites   │    │(tar+pigz)│                    │ (rclone) │  │
+│  └──────────┘    └──────────┘                    └──────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Why This Tool?
 
 Panel backups fail silently. Whether you're using cPanel, Plesk, Enhance, xCloud, or any other hosting panel — their built-in backup systems can fail without warning. You need an **independent backup layer** that:
