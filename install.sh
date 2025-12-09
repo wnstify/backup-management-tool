@@ -1,20 +1,24 @@
-#!/usr/bin/env bash
-# ============================================================================
-# Backup Management Tool - Installer
+#!/bin/bash
+#
+# Backup Management Tool - One-Line Installer
 # by Webnestify (https://webnestify.cloud)
 #
-# One-liner installation:
-# curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash
 #
-# Or with wget:
-# wget -qO- https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash
-# ============================================================================
-set -euo pipefail
+# Uninstall:
+#   curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash -s -- --uninstall
+#
 
-VERSION="1.0.0"
-REPO_URL="https://raw.githubusercontent.com/wnstify/backup-management-tool/main"
+set -e
+
+# GitHub raw URL base
+GITHUB_RAW="https://raw.githubusercontent.com/wnstify/backup-management-tool/main"
+
+# Installation paths
 INSTALL_DIR="/etc/backup-management"
-BIN_PATH="/usr/local/bin/backup-management"
+SCRIPT_NAME="backup-management.sh"
+BIN_LINK="/usr/local/bin/backup-management"
 
 # Colors
 RED='\033[0;31m'
@@ -25,136 +29,157 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 print_banner() {
-  echo -e "${BLUE}"
-  echo "╔═══════════════════════════════════════════════════════════╗"
-  echo "║                                                           ║"
-  echo "║        Backup Management Tool Installer v${VERSION}          ║"
-  echo "║                    by Webnestify                          ║"
-  echo "║                                                           ║"
-  echo "╚═══════════════════════════════════════════════════════════╝"
-  echo -e "${NC}"
+    echo -e "${CYAN}"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║                                                           ║"
+    echo "║        Backup Management Tool - Installer                 ║"
+    echo "║                  by Webnestify                            ║"
+    echo "║                                                           ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
 }
 
-print_step() {
-  echo -e "${CYAN}▶ $1${NC}"
+print_disclaimer() {
+    echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${YELLOW}                        DISCLAIMER${NC}"
+    echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo "This tool is provided AS-IS without warranty. By installing,"
+    echo "you acknowledge that:"
+    echo ""
+    echo "  • You are responsible for your own backups and data"
+    echo "  • You should test restores before relying on backups"
+    echo "  • The authors are not liable for any data loss"
+    echo ""
+    echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
+    echo ""
 }
 
-print_success() {
-  echo -e "${GREEN}✓ $1${NC}"
-}
-
-print_error() {
-  echo -e "${RED}✗ $1${NC}"
-}
-
-print_warning() {
-  echo -e "${YELLOW}! $1${NC}"
-}
-
-# Check if running as root
 check_root() {
-  if [[ $EUID -ne 0 ]]; then
-    print_error "This installer must be run as root"
-    echo "Please run: sudo bash install.sh"
-    exit 1
-  fi
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "${RED}Error: This installer must be run as root${NC}"
+        echo "Please run: curl -fsSL ... | sudo bash"
+        exit 1
+    fi
 }
 
-# Check system requirements
-check_requirements() {
-  print_step "Checking system requirements..."
-  
-  local missing=()
-  
-  # Check for required commands
-  command -v bash >/dev/null 2>&1 || missing+=("bash")
-  command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || missing+=("curl or wget")
-  command -v openssl >/dev/null 2>&1 || missing+=("openssl")
-  command -v gpg >/dev/null 2>&1 || missing+=("gpg")
-  command -v tar >/dev/null 2>&1 || missing+=("tar")
-  command -v systemctl >/dev/null 2>&1 || missing+=("systemd")
-  
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    print_error "Missing required packages: ${missing[*]}"
-    exit 1
-  fi
-  
-  print_success "System requirements met"
+check_system() {
+    echo -e "${BLUE}[1/5] Checking system requirements...${NC}"
+    
+    # Check OS
+    if [[ -f /etc/os-release ]]; then
+        source /etc/os-release
+        echo -e "  OS: ${GREEN}$PRETTY_NAME${NC}"
+    fi
+    
+    # Check required commands
+    local required_cmds=("bash" "openssl" "gpg" "tar" "systemctl")
+    for cmd in "${required_cmds[@]}"; do
+        if ! command -v "$cmd" &> /dev/null; then
+            echo -e "${RED}Error: Required command '$cmd' not found${NC}"
+            exit 1
+        fi
+    done
+    echo -e "  Required tools: ${GREEN}OK${NC}"
+    
+    # Check for curl or wget
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
+        echo -e "${RED}Error: Either curl or wget is required${NC}"
+        exit 1
+    fi
+    echo -e "  Download tool: ${GREEN}OK${NC}"
+    
+    # Check systemd
+    if ! pidof systemd &> /dev/null; then
+        echo -e "${YELLOW}Warning: systemd not detected. Timers may not work.${NC}"
+    else
+        echo -e "  systemd: ${GREEN}OK${NC}"
+    fi
 }
 
-# Install dependencies
 install_dependencies() {
-  print_step "Installing dependencies..."
-  
-  # Detect package manager
-  if command -v apt-get >/dev/null 2>&1; then
-    PKG_MANAGER="apt-get"
-    PKG_UPDATE="apt-get update -qq"
-    PKG_INSTALL="apt-get install -y -qq"
-  elif command -v yum >/dev/null 2>&1; then
-    PKG_MANAGER="yum"
-    PKG_UPDATE="yum makecache -q"
-    PKG_INSTALL="yum install -y -q"
-  elif command -v dnf >/dev/null 2>&1; then
-    PKG_MANAGER="dnf"
-    PKG_UPDATE="dnf makecache -q"
-    PKG_INSTALL="dnf install -y -q"
-  else
-    print_warning "Unknown package manager. Please install pigz manually."
-    return
-  fi
-  
-  # Install pigz if not present
-  if ! command -v pigz >/dev/null 2>&1; then
-    print_step "Installing pigz..."
-    $PKG_UPDATE >/dev/null 2>&1 || true
-    $PKG_INSTALL pigz >/dev/null 2>&1 || print_warning "Could not install pigz automatically"
-  fi
-  
-  # Install rclone if not present
-  if ! command -v rclone >/dev/null 2>&1; then
-    print_step "Installing rclone..."
-    curl -fsSL https://rclone.org/install.sh | bash >/dev/null 2>&1 || {
-      print_warning "Could not install rclone automatically"
-      print_warning "Please install manually: https://rclone.org/install/"
-    }
-  fi
-  
-  print_success "Dependencies installed"
+    echo -e "${BLUE}[2/5] Installing dependencies...${NC}"
+    
+    # Update package list (suppress output)
+    apt-get update -qq 2>/dev/null || true
+    
+    # Install pigz if not present
+    if ! command -v pigz &> /dev/null; then
+        echo -e "  Installing pigz..."
+        apt-get install -y -qq pigz 2>/dev/null || echo -e "  ${YELLOW}pigz install failed - will use gzip${NC}"
+    fi
+    if command -v pigz &> /dev/null; then
+        echo -e "  pigz: ${GREEN}OK${NC}"
+    fi
+    
+    # Install rclone if not present
+    if ! command -v rclone &> /dev/null; then
+        echo -e "  Installing rclone..."
+        if command -v curl &> /dev/null; then
+            curl -fsSL https://rclone.org/install.sh | bash -s beta 2>/dev/null || true
+        fi
+    fi
+    if command -v rclone &> /dev/null; then
+        echo -e "  rclone: ${GREEN}OK${NC}"
+    else
+        echo -e "  rclone: ${YELLOW}Not installed - install manually or via setup${NC}"
+    fi
 }
 
-# Download and install the main script
-install_tool() {
-  print_step "Downloading Backup Management Tool..."
-  
-  # Create installation directory
-  mkdir -p "$INSTALL_DIR"
-  mkdir -p "$INSTALL_DIR/scripts"
-  mkdir -p "$INSTALL_DIR/logs"
-  chmod 700 "$INSTALL_DIR"
-  
-  # Download main script
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$REPO_URL/backup-management.sh" -o "$INSTALL_DIR/backup-management.sh"
-  else
-    wget -qO "$INSTALL_DIR/backup-management.sh" "$REPO_URL/backup-management.sh"
-  fi
-  
-  chmod +x "$INSTALL_DIR/backup-management.sh"
-  
-  # Create symlink to /usr/local/bin
-  ln -sf "$INSTALL_DIR/backup-management.sh" "$BIN_PATH"
-  
-  print_success "Tool installed to $INSTALL_DIR"
-  print_success "Command 'backup-management' is now available"
+download_script() {
+    echo -e "${BLUE}[3/5] Downloading backup-management.sh...${NC}"
+    
+    # Create installation directory
+    mkdir -p "$INSTALL_DIR"
+    mkdir -p "${INSTALL_DIR}/scripts"
+    mkdir -p "${INSTALL_DIR}/logs"
+    
+    # Download main script
+    local script_url="${GITHUB_RAW}/${SCRIPT_NAME}"
+    local target_path="${INSTALL_DIR}/${SCRIPT_NAME}"
+    
+    echo -e "  Downloading from: ${script_url}"
+    
+    if command -v curl &> /dev/null; then
+        if ! curl -fsSL "$script_url" -o "$target_path"; then
+            echo -e "${RED}Error: Failed to download script with curl${NC}"
+            exit 1
+        fi
+    elif command -v wget &> /dev/null; then
+        if ! wget -q "$script_url" -O "$target_path"; then
+            echo -e "${RED}Error: Failed to download script with wget${NC}"
+            exit 1
+        fi
+    fi
+    
+    # Verify download
+    if [[ ! -s "$target_path" ]]; then
+        echo -e "${RED}Error: Downloaded file is empty${NC}"
+        exit 1
+    fi
+    
+    # Check if it looks like a bash script
+    if ! head -1 "$target_path" | grep -q "^#!"; then
+        echo -e "${RED}Error: Downloaded file does not appear to be a valid script${NC}"
+        echo -e "${RED}First line: $(head -1 "$target_path")${NC}"
+        exit 1
+    fi
+    
+    # Make executable
+    chmod +x "$target_path"
+    
+    # Create symlink
+    ln -sf "$target_path" "$BIN_LINK"
+    
+    echo -e "  Script: ${GREEN}${target_path}${NC}"
+    echo -e "  Command: ${GREEN}backup-management${NC}"
 }
 
-# Create systemd service and timer units
-install_systemd_units() {
-  print_step "Installing systemd units..."
-  
-  # Database backup service
-  cat > /etc/systemd/system/backup-management-db.service << 'EOF'
+create_systemd_units() {
+    echo -e "${BLUE}[4/5] Creating systemd service units...${NC}"
+    
+    # Database backup service
+    cat > /etc/systemd/system/backup-management-db.service << 'EOF'
 [Unit]
 Description=Backup Management - Database Backup
 After=network-online.target mysql.service mariadb.service
@@ -172,14 +197,14 @@ IOSchedulingClass=idle
 WantedBy=multi-user.target
 EOF
 
-  # Database backup timer
-  cat > /etc/systemd/system/backup-management-db.timer << 'EOF'
+    # Database backup timer
+    cat > /etc/systemd/system/backup-management-db.timer << 'EOF'
 [Unit]
 Description=Backup Management - Database Backup Timer
 Requires=backup-management-db.service
 
 [Timer]
-OnCalendar=hourly
+OnCalendar=*-*-* 0/2:00:00
 RandomizedDelaySec=300
 Persistent=true
 
@@ -187,8 +212,8 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-  # Files backup service
-  cat > /etc/systemd/system/backup-management-files.service << 'EOF'
+    # Files backup service
+    cat > /etc/systemd/system/backup-management-files.service << 'EOF'
 [Unit]
 Description=Backup Management - Files Backup
 After=network-online.target
@@ -206,128 +231,108 @@ IOSchedulingClass=idle
 WantedBy=multi-user.target
 EOF
 
-  # Files backup timer
-  cat > /etc/systemd/system/backup-management-files.timer << 'EOF'
+    # Files backup timer
+    cat > /etc/systemd/system/backup-management-files.timer << 'EOF'
 [Unit]
 Description=Backup Management - Files Backup Timer
 Requires=backup-management-files.service
 
 [Timer]
 OnCalendar=*-*-* 03:00:00
-RandomizedDelaySec=600
+RandomizedDelaySec=300
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 EOF
 
-  # Reload systemd
-  systemctl daemon-reload
-  
-  print_success "Systemd units installed"
+    # Reload systemd
+    systemctl daemon-reload
+    
+    echo -e "  Services: ${GREEN}Created${NC}"
+    echo -e "  Timers: ${GREEN}Created (not enabled yet)${NC}"
 }
 
-# Print completion message
-print_completion() {
-  echo
-  echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
-  echo -e "${GREEN}║           Installation Complete!                          ║${NC}"
-  echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
-  echo
-  echo -e "To get started, run:"
-  echo -e "  ${CYAN}backup-management${NC}"
-  echo
-  echo -e "This will launch the setup wizard to configure:"
-  echo -e "  • Encryption password"
-  echo -e "  • Database credentials"
-  echo -e "  • Remote storage (rclone)"
-  echo -e "  • Notifications (optional)"
-  echo -e "  • Backup schedules"
-  echo
-  echo -e "After setup, backups will run automatically via systemd timers."
-  echo
-  echo -e "${YELLOW}Documentation:${NC} https://github.com/wnstify/backup-management-tool"
-  echo -e "${YELLOW}Support:${NC} https://webnestify.cloud"
-  echo
+print_success() {
+    echo -e "${BLUE}[5/5] Installation complete!${NC}"
+    echo ""
+    echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}            Installation Successful!${NC}"
+    echo -e "${GREEN}════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  ${CYAN}To get started, run:${NC}"
+    echo ""
+    echo -e "    ${YELLOW}sudo backup-management${NC}"
+    echo ""
+    echo -e "  ${CYAN}This will guide you through:${NC}"
+    echo "    1. Database credentials setup"
+    echo "    2. Cloud storage configuration (rclone)"
+    echo "    3. Backup scheduling"
+    echo "    4. Notification settings (optional)"
+    echo ""
+    echo -e "  ${CYAN}Documentation:${NC}"
+    echo -e "    https://github.com/wnstify/backup-management-tool"
+    echo ""
 }
 
-# Uninstall function (can be called with --uninstall flag)
 uninstall() {
-  print_banner
-  print_step "Uninstalling Backup Management Tool..."
-  
-  # Stop and disable timers
-  systemctl stop backup-management-db.timer 2>/dev/null || true
-  systemctl stop backup-management-files.timer 2>/dev/null || true
-  systemctl disable backup-management-db.timer 2>/dev/null || true
-  systemctl disable backup-management-files.timer 2>/dev/null || true
-  
-  # Remove systemd units
-  rm -f /etc/systemd/system/backup-management-db.service
-  rm -f /etc/systemd/system/backup-management-db.timer
-  rm -f /etc/systemd/system/backup-management-files.service
-  rm -f /etc/systemd/system/backup-management-files.timer
-  systemctl daemon-reload
-  
-  # Remove binary
-  rm -f "$BIN_PATH"
-  
-  # Ask about config removal
-  echo
-  read -p "Remove configuration and secrets? (y/N): " remove_config
-  if [[ "$remove_config" =~ ^[Yy]$ ]]; then
-    # Get secrets location
-    if [[ -f "$INSTALL_DIR/.secrets_location" ]]; then
-      secrets_dir="$(cat "$INSTALL_DIR/.secrets_location")"
-      if [[ -n "$secrets_dir" && -d "$secrets_dir" ]]; then
-        chattr -i "$secrets_dir"/* 2>/dev/null || true
-        chattr -i "$secrets_dir" 2>/dev/null || true
-        rm -rf "$secrets_dir"
-      fi
+    echo -e "${YELLOW}Uninstalling Backup Management Tool...${NC}"
+    
+    # Stop and disable timers
+    systemctl stop backup-management-db.timer 2>/dev/null || true
+    systemctl stop backup-management-files.timer 2>/dev/null || true
+    systemctl disable backup-management-db.timer 2>/dev/null || true
+    systemctl disable backup-management-files.timer 2>/dev/null || true
+    
+    # Remove systemd units
+    rm -f /etc/systemd/system/backup-management-db.service
+    rm -f /etc/systemd/system/backup-management-db.timer
+    rm -f /etc/systemd/system/backup-management-files.service
+    rm -f /etc/systemd/system/backup-management-files.timer
+    systemctl daemon-reload
+    
+    # Remove symlink
+    rm -f "$BIN_LINK"
+    
+    # Ask about config/secrets
+    echo ""
+    read -p "Remove configuration and encrypted secrets? (y/N): " remove_config
+    if [[ "$remove_config" =~ ^[Yy]$ ]]; then
+        rm -rf "$INSTALL_DIR"
+        # Try to find and remove secrets directory
+        for dir in /etc/.*; do
+            if [[ -d "$dir" ]] && [[ -f "$dir/.db_credentials.enc" || -f "$dir/.encryption_key.enc" ]]; then
+                chattr -i "$dir"/* 2>/dev/null || true
+                rm -rf "$dir"
+                echo -e "  Removed secrets directory: $dir"
+            fi
+        done
+        echo -e "${GREEN}Configuration and secrets removed.${NC}"
+    else
+        rm -f "${INSTALL_DIR}/${SCRIPT_NAME}"
+        echo -e "${GREEN}Script removed. Configuration preserved at ${INSTALL_DIR}${NC}"
     fi
-    rm -rf "$INSTALL_DIR"
-    print_success "Configuration and secrets removed"
-  else
-    print_warning "Configuration kept at $INSTALL_DIR"
-  fi
-  
-  print_success "Uninstallation complete"
-  exit 0
+    
+    echo -e "${GREEN}Uninstallation complete.${NC}"
+    exit 0
 }
 
-# Main installation flow
+# Main
 main() {
-  # Check for uninstall flag
-  if [[ "${1:-}" == "--uninstall" ]] || [[ "${1:-}" == "-u" ]]; then
+    # Check for uninstall flag
+    if [[ "$1" == "--uninstall" ]] || [[ "$1" == "-u" ]]; then
+        check_root
+        uninstall
+    fi
+    
+    print_banner
+    print_disclaimer
     check_root
-    uninstall
-  fi
-  
-  print_banner
-  
-  echo -e "${YELLOW}┌────────────────────────────────────────────────────────┐${NC}"
-  echo -e "${YELLOW}│                      DISCLAIMER                        │${NC}"
-  echo -e "${YELLOW}├────────────────────────────────────────────────────────┤${NC}"
-  echo -e "${YELLOW}│ This tool is provided \"as is\" without warranty.        │${NC}"
-  echo -e "${YELLOW}│ Always create a server SNAPSHOT before using.          │${NC}"
-  echo -e "${YELLOW}│ Use at your own risk.                                  │${NC}"
-  echo -e "${YELLOW}└────────────────────────────────────────────────────────┘${NC}"
-  echo
-  
-  read -p "Continue with installation? (Y/n): " confirm
-  if [[ "$confirm" =~ ^[Nn]$ ]]; then
-    echo "Installation cancelled."
-    exit 0
-  fi
-  
-  echo
-  
-  check_root
-  check_requirements
-  install_dependencies
-  install_tool
-  install_systemd_units
-  print_completion
+    check_system
+    install_dependencies
+    download_script
+    create_systemd_units
+    print_success
 }
 
 main "$@"
