@@ -305,9 +305,9 @@ uninstall() {
             local secrets_dir
             secrets_dir=$(cat "${INSTALL_DIR}/.secrets_location" 2>/dev/null)
             if [[ -n "$secrets_dir" ]] && [[ -d "$secrets_dir" ]]; then
-                # Unlock files first
+                # Unlock files first (including .s salt file)
                 chattr -i "$secrets_dir" 2>/dev/null || true
-                for f in ".c1" ".c2" ".c3" ".c4" ".c5"; do
+                for f in ".s" ".c1" ".c2" ".c3" ".c4" ".c5"; do
                     [[ -f "$secrets_dir/$f" ]] && chattr -i "$secrets_dir/$f" 2>/dev/null || true
                 done
                 rm -rf "$secrets_dir"
@@ -318,7 +318,7 @@ uninstall() {
         for dir in /etc/.*; do
             if [[ -d "$dir" ]] && [[ -f "$dir/.c1" ]]; then
                 chattr -i "$dir" 2>/dev/null || true
-                for f in ".c1" ".c2" ".c3" ".c4" ".c5"; do
+                for f in ".s" ".c1" ".c2" ".c3" ".c4" ".c5"; do
                     [[ -f "$dir/$f" ]] && chattr -i "$dir/$f" 2>/dev/null || true
                 done
                 rm -rf "$dir"

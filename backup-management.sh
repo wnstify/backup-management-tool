@@ -385,7 +385,7 @@ secret_exists() {
 lock_secrets() {
   local secrets_dir="$1"
   # Only lock our specific secret files, not all files in directory
-  local secret_files=(".c1" ".c2" ".c3" ".c4" ".c5")
+  local secret_files=(".s" ".c1" ".c2" ".c3" ".c4" ".c5")
   for f in "${secret_files[@]}"; do
     [[ -f "$secrets_dir/$f" ]] && chattr +i "$secrets_dir/$f" 2>/dev/null || true
   done
@@ -396,7 +396,7 @@ unlock_secrets() {
   local secrets_dir="$1"
   chattr -i "$secrets_dir" 2>/dev/null || true
   # Only unlock our specific secret files, not all files in directory
-  local secret_files=(".c1" ".c2" ".c3" ".c4" ".c5")
+  local secret_files=(".s" ".c1" ".c2" ".c3" ".c4" ".c5")
   for f in "${secret_files[@]}"; do
     [[ -f "$secrets_dir/$f" ]] && chattr -i "$secrets_dir/$f" 2>/dev/null || true
   done
