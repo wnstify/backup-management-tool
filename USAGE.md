@@ -25,16 +25,19 @@ Complete usage documentation for **Backup Management Tool v1.1.1** by Webnestify
 
 Before running the Backup Management Tool, ensure you have the following:
 
-### Required (install manually)
+### System Requirements
 
-```bash
-# Install pigz (parallel gzip - required for compression)
-sudo apt update && sudo apt install pigz -y
-```
+| Requirement | Notes |
+|-------------|-------|
+| **OS** | Ubuntu 20.04+, Debian 10+ (or compatible) |
+| **Access** | Root or sudo |
+| **MySQL/MariaDB** | For database backups |
+| **systemd** | For scheduled backups |
 
-### Auto-installed by the script
+### Auto-installed by the installer
 
 The following will be **automatically installed** if missing:
+- **pigz** - parallel gzip for fast compression
 - **rclone** - for remote cloud storage
 
 ### Usually pre-installed
@@ -45,14 +48,14 @@ These packages are typically already available on most Linux systems:
 - `tar` - archive creation
 - `curl` - notifications
 
-### Verify prerequisites
+### Verify prerequisites (optional)
 
 ```bash
-# Check if pigz is installed
-which pigz || echo "pigz NOT installed - run: sudo apt install pigz"
-
-# Check other tools (usually pre-installed)
+# Check tools (these are usually pre-installed)
 which openssl gpg tar curl
+
+# After installation, verify auto-installed tools
+which pigz rclone
 ```
 
 ---
@@ -129,7 +132,7 @@ Select option [1-8]:
 | **2. Restore from backup** | Restore databases or files from existing backups |
 | **3. View status** | Display current configuration and system status |
 | **4. View logs** | View backup logs for troubleshooting |
-| **5. Manage schedules** | Add, modify, or remove cron schedules |
+| **5. Manage schedules** | Add, modify, or disable backup schedules |
 | **6. Reconfigure** | Run the setup wizard again |
 | **7. Uninstall** | Remove the tool completely |
 | **8. Exit** | Exit the application |
@@ -288,8 +291,8 @@ Step 7: Generating Backup Scripts
 ### Step 8: Schedule Backups
 
 ```
-Step 8: Schedule Backups
-------------------------
+Step 8: Schedule Backups (systemd timers)
+-----------------------------------------
 Schedule automatic database backups? (Y/n): y
 
 Select schedule for database backup:
@@ -297,18 +300,19 @@ Select schedule for database backup:
 2. Every 2 hours
 3. Every 6 hours
 4. Daily (at midnight)
-5. Weekly (Sunday at midnight)
-6. Custom cron expression
+5. Daily (at 3 AM)
+6. Weekly (Sunday at midnight)
+7. Custom schedule
 
-Select option [1-6]:
+Select option [1-7]:
 ```
 
 **Recommended Schedules:**
 
-| Backup Type | Recommendation | Cron |
-|-------------|----------------|------|
-| Database | Hourly | `0 * * * *` |
-| Files | Daily (3 AM) | `0 3 * * *` |
+| Backup Type | Recommendation | Systemd OnCalendar |
+|-------------|----------------|-------------------|
+| Database | Every 2 hours | `*-*-* 0/2:00:00` |
+| Files | Daily (3 AM) | `*-*-* 03:00:00` |
 
 ---
 
@@ -323,7 +327,7 @@ Run Backup
 1. Run database backup
 2. Run files backup
 3. Run both (database + files)
-4. Run cleanup now
+4. Run cleanup now (remove old backups)
 5. Back to main menu
 
 Select option [1-5]:
@@ -550,8 +554,8 @@ Manage Backup Schedules
 
 Current Schedules:
 
-✓ Database: 0 * * * *
-✓ Files: 0 3 * * *
+✓ Database (systemd): *-*-* *:00:00
+✓ Files (systemd): *-*-* 03:00:00
 
 Retention Policy:
 ✓ Retention: 30 days
@@ -559,10 +563,10 @@ Retention Policy:
 Options:
 1. Set/change database backup schedule
 2. Set/change files backup schedule
-3. Remove database backup schedule
-4. Remove files backup schedule
+3. Disable database backup schedule
+4. Disable files backup schedule
 5. Change retention policy
-6. Regenerate backup scripts
+6. View timer status
 7. Back to main menu
 
 Select option [1-7]:
@@ -570,14 +574,15 @@ Select option [1-7]:
 
 ### Schedule Options
 
-| Option | Cron Expression | Description |
-|--------|-----------------|-------------|
-| Hourly | `0 * * * *` | Every hour at :00 |
-| Every 2 hours | `0 */2 * * *` | Every 2 hours at :00 |
-| Every 6 hours | `0 */6 * * *` | At 00:00, 06:00, 12:00, 18:00 |
-| Daily | `0 0 * * *` | Daily at midnight |
-| Weekly | `0 0 * * 0` | Sundays at midnight |
-| Custom | Your expression | Any valid cron expression |
+| Option | Systemd OnCalendar | Description |
+|--------|-------------------|-------------|
+| Hourly | `hourly` | Every hour at :00 |
+| Every 2 hours | `*-*-* 0/2:00:00` | Every 2 hours at :00 |
+| Every 6 hours | `*-*-* 0/6:00:00` | At 00:00, 06:00, 12:00, 18:00 |
+| Daily at midnight | `*-*-* 00:00:00` | Daily at midnight |
+| Daily at 3 AM | `*-*-* 03:00:00` | Daily at 3 AM (recommended for files) |
+| Weekly | `Sun *-*-* 00:00:00` | Sundays at midnight |
+| Custom | Your expression | Any valid systemd OnCalendar expression |
 
 ### Retention Options
 
@@ -593,20 +598,51 @@ Select option [1-7]:
 | 365 days | 525600 | Annual |
 | Disabled | 0 | No automatic cleanup |
 
-### Custom Cron Examples
+### View Timer Status
+
+Option 6 shows detailed systemd timer information:
+
+```
+Timer Status
+============
+
+backup-management-db.timer
+  Loaded: loaded
+  Active: active (waiting)
+  Next: 2025-01-15 04:00:00 UTC
+  Last: 2025-01-15 03:00:01 UTC
+
+backup-management-files.timer
+  Loaded: loaded
+  Active: active (waiting)
+  Next: 2025-01-16 03:00:00 UTC
+  Last: 2025-01-15 03:00:01 UTC
+```
+
+### Custom Schedule Examples
+
+Systemd uses OnCalendar expressions (not cron):
 
 ```
 # Every 30 minutes
-*/30 * * * *
+*-*-* *:0/30:00
 
 # At 3:30 AM daily
-30 3 * * *
+*-*-* 03:30:00
 
 # Every Monday and Thursday at 2 AM
-0 2 * * 1,4
+Mon,Thu *-*-* 02:00:00
 
 # First day of every month at 4 AM
-0 4 1 * *
+*-*-01 04:00:00
+
+# Every weekday at 6 AM
+Mon..Fri *-*-* 06:00:00
+```
+
+**Test your expression:**
+```bash
+systemd-analyze calendar "*-*-* 03:30:00"
 ```
 
 ---
@@ -630,9 +666,9 @@ Restore Scripts:
 ✓ Database restore script
 ✓ Files restore script
 
-Scheduled Backups:
-✓ Database backup cron: 0 * * * *
-✓ Files backup cron: 0 3 * * *
+Scheduled Backups (systemd timers):
+✓ Database: *-*-* *:00:00 (hourly)
+✓ Files: *-*-* 03:00:00 (daily at 3 AM)
 
 Retention Policy:
 ✓ Retention: 30 days
@@ -758,6 +794,35 @@ For automation or scripting, access the generated scripts directly:
 
 # Run files restore (interactive)
 /etc/backup-management/scripts/files_restore.sh
+```
+
+### Systemd Timer Management
+
+The tool uses systemd timers for scheduling. Useful commands:
+
+```bash
+# List all backup timers
+systemctl list-timers | grep backup-management
+
+# Check timer status
+systemctl status backup-management-db.timer
+systemctl status backup-management-files.timer
+
+# Manually trigger a backup (via systemd)
+systemctl start backup-management-db.service
+systemctl start backup-management-files.service
+
+# View timer logs
+journalctl -u backup-management-db.service -f
+journalctl -u backup-management-files.service -f
+
+# Disable a timer
+systemctl disable backup-management-db.timer
+systemctl stop backup-management-db.timer
+
+# Re-enable a timer
+systemctl enable backup-management-db.timer
+systemctl start backup-management-db.timer
 ```
 
 ### Log File Locations
