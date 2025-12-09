@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.1.1** by Webnestify.
 
 ## Table of Contents
 
@@ -9,12 +9,15 @@ Complete usage documentation for **Backup Management Tool** by Webnestify.
 - [Main Menu](#main-menu)
 - [Setup Wizard](#setup-wizard)
 - [Running Backups](#running-backups)
+- [Retention & Cleanup](#retention--cleanup)
 - [Restoring Backups](#restoring-backups)
 - [Managing Schedules](#managing-schedules)
 - [Viewing Status & Logs](#viewing-status--logs)
+- [Notifications](#notifications)
 - [Command Line Usage](#command-line-usage)
 - [Advanced Configuration](#advanced-configuration)
 - [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -68,7 +71,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.0.0
+       Backup Management Tool v1.1.1
                   by Webnestify
 ========================================================
 
@@ -99,7 +102,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.0.0
+       Backup Management Tool v1.1.1
                   by Webnestify
 ========================================================
 
@@ -235,12 +238,46 @@ Do you have an ntfy auth token? (y/N):
 3. Install the ntfy app on your phone
 4. Subscribe to your topic
 
-### Step 6: Script Generation
+### Step 6: Retention Policy
+
+```
+Step 6: Retention Policy
+------------------------
+How long should backups be kept before automatic deletion?
+
+Select retention period:
+  1) 1 minute (TESTING ONLY)
+  2) 1 hour (TESTING)
+  3) 7 days
+  4) 14 days
+  5) 30 days (default)
+  6) 60 days
+  7) 90 days
+  8) 365 days (1 year)
+  9) No automatic cleanup
+
+Select option [1-9]:
+```
+
+**Retention Options:**
+
+| Option | Use Case |
+|--------|----------|
+| 1 minute / 1 hour | Testing only - verify cleanup works |
+| 7 days | Short-term, high-frequency backups |
+| 14-30 days | Standard retention (recommended) |
+| 60-90 days | Extended retention for compliance |
+| 365 days | Long-term archival |
+| No cleanup | Manual management via cloud provider |
+
+**Note:** Old backups are automatically deleted after each successful backup. You can also run cleanup manually from the menu.
+
+### Step 7: Script Generation
 
 The wizard generates all backup and restore scripts automatically.
 
 ```
-Step 6: Generating Backup Scripts
+Step 7: Generating Backup Scripts
 ----------------------------------
 ✓ Database backup script generated
 ✓ Database restore script generated
@@ -248,10 +285,10 @@ Step 6: Generating Backup Scripts
 ✓ Files restore script generated
 ```
 
-### Step 7: Schedule Backups
+### Step 8: Schedule Backups
 
 ```
-Step 7: Schedule Backups
+Step 8: Schedule Backups
 ------------------------
 Schedule automatic database backups? (Y/n): y
 
@@ -286,9 +323,10 @@ Run Backup
 1. Run database backup
 2. Run files backup
 3. Run both (database + files)
-4. Back to main menu
+4. Run cleanup now
+5. Back to main menu
 
-Select option [1-4]:
+Select option [1-5]:
 ```
 
 ### Manual Backup Progress
@@ -302,6 +340,9 @@ Select option [1-4]:
     OK: wordpress_site2
 Archive verified.
 Uploaded to b2:myserver/db-backups
+Running retention cleanup (keeping backups newer than 43200 minutes)...
+  Deleting old backup: myserver-db_backups-2024-12-01-0300.tar.gz.gpg
+Retention cleanup complete. Removed 1 old backup(s).
 ==== 2025-01-15 03:00:45 END (success) ====
 ```
 
@@ -313,6 +354,8 @@ Uploaded to b2:myserver/db-backups
 [FILES-BACKUP] [site1.com] Uploading...
 [FILES-BACKUP] [site2.com] Archiving...
 [FILES-BACKUP] [site2.com] Uploading...
+[FILES-BACKUP] Running retention cleanup (keeping backups newer than 43200 minutes)...
+[FILES-BACKUP] Retention cleanup complete. No old backups to remove.
 ==== 2025-01-15 03:05:32 END (success) ====
 ```
 
@@ -327,6 +370,86 @@ You can also run backup scripts directly:
 # Files backup
 /etc/backup-management/scripts/files_backup.sh
 ```
+
+---
+
+## Retention & Cleanup
+
+The tool automatically manages backup retention, deleting old backups based on your configured policy.
+
+### How Retention Works
+
+1. **After each backup** — Old backups are automatically checked and deleted
+2. **Based on file age** — Uses the backup file's modification time from cloud storage
+3. **Safe cleanup** — Only deletes files matching backup patterns
+
+### Automatic Cleanup
+
+When you run a backup (manually or scheduled), cleanup runs automatically at the end:
+
+```
+Running retention cleanup (keeping backups newer than 43200 minutes)...
+  Deleting old backup: myserver-db_backups-2024-12-01-0300.tar.gz.gpg
+  Deleting old backup: myserver-db_backups-2024-12-02-0300.tar.gz.gpg
+Retention cleanup complete. Removed 2 old backup(s).
+```
+
+### Manual Cleanup
+
+Run cleanup on-demand without running a backup:
+
+```
+Run Cleanup Now
+===============
+
+Current retention policy: 30 days
+
+This will delete backups older than 43200 minutes.
+
+Continue? (y/N): y
+
+Cutoff time: 2024-12-16 03:00:00
+
+Checking database backups at b2:myserver/db-backups...
+  Deleting: myserver-db_backups-2024-12-01-0300.tar.gz.gpg (2024-12-01 03:00)
+Checking files backups at b2:myserver/file-backups...
+  (no old backups found)
+
+✓ Cleanup complete. Removed 1 old backup(s).
+```
+
+### Cleanup Error Handling
+
+If cleanup encounters errors, they are logged:
+
+```
+Running retention cleanup (keeping backups newer than 43200 minutes)...
+  Deleting old backup: myserver-db_backups-2024-12-01-0300.tar.gz.gpg
+  [ERROR] Failed to delete myserver-db_backups-2024-12-02.tar.gz.gpg: permission denied
+[WARNING] Retention cleanup completed with 1 error(s). Removed 1 old backup(s).
+```
+
+### Cleanup Notifications
+
+If ntfy notifications are configured, you'll receive alerts:
+
+| Scenario | Notification |
+|----------|--------------|
+| Success (files deleted) | "DB Retention Cleanup on hostname - Removed 3 old backup(s)" |
+| Warning (some errors) | "DB Retention Cleanup Warning on hostname - Removed: 2, Errors: 1" |
+| Failure | "DB Retention Cleanup Failed on hostname - Could not calculate cutoff time" |
+
+**Note:** No notification is sent if there are zero old backups to remove (to avoid spam).
+
+### Changing Retention Policy
+
+To change the retention period after setup:
+
+```
+Manage schedules → Change retention policy
+```
+
+This regenerates the backup scripts with the new retention value.
 
 ---
 
@@ -430,14 +553,19 @@ Current Schedules:
 ✓ Database: 0 * * * *
 ✓ Files: 0 3 * * *
 
+Retention Policy:
+✓ Retention: 30 days
+
 Options:
 1. Set/change database backup schedule
 2. Set/change files backup schedule
 3. Remove database backup schedule
 4. Remove files backup schedule
-5. Back to main menu
+5. Change retention policy
+6. Regenerate backup scripts
+7. Back to main menu
 
-Select option [1-5]:
+Select option [1-7]:
 ```
 
 ### Schedule Options
@@ -450,6 +578,20 @@ Select option [1-5]:
 | Daily | `0 0 * * *` | Daily at midnight |
 | Weekly | `0 0 * * 0` | Sundays at midnight |
 | Custom | Your expression | Any valid cron expression |
+
+### Retention Options
+
+| Period | Minutes | Use Case |
+|--------|---------|----------|
+| 1 minute | 1 | Testing only |
+| 1 hour | 60 | Testing only |
+| 7 days | 10080 | Short-term |
+| 14 days | 20160 | Standard |
+| 30 days | 43200 | Default |
+| 60 days | 86400 | Extended |
+| 90 days | 129600 | Long-term |
+| 365 days | 525600 | Annual |
+| Disabled | 0 | No automatic cleanup |
 
 ### Custom Cron Examples
 
@@ -492,6 +634,9 @@ Scheduled Backups:
 ✓ Database backup cron: 0 * * * *
 ✓ Files backup cron: 0 3 * * *
 
+Retention Policy:
+✓ Retention: 30 days
+
 Remote Storage:
 ✓ Remote: b2
         Database path: myserver/db-backups
@@ -504,6 +649,12 @@ Recent Backup Activity:
 ───────────────────────────────────────────────────────
   Webnestify | https://webnestify.cloud
 ───────────────────────────────────────────────────────
+```
+
+**Note:** If retention is set to "No automatic cleanup", it will display as a warning:
+```
+Retention Policy:
+⚠ Retention: No automatic cleanup
 ```
 
 ### Viewing Logs
@@ -524,6 +675,58 @@ Logs are displayed using `less` for easy navigation:
 - Press `q` to quit
 - Press `/` to search
 - Press `G` to go to end
+
+---
+
+## Notifications
+
+The tool supports push notifications via [ntfy.sh](https://ntfy.sh) for backup events.
+
+### Notification Types
+
+| Event | Title | Message |
+|-------|-------|---------|
+| **DB Backup Success** | DB Backup Successful on hostname | All 5 databases backed up |
+| **DB Backup Errors** | DB Backup Completed with Errors on hostname | Backed up: 4, Failed: db_name |
+| **Files Backup Success** | Files Backup Success on hostname | 3 sites backed up |
+| **Files Backup Errors** | Files Backup Errors on hostname | Success: 2, Failed: site.com |
+| **DB Retention Success** | DB Retention Cleanup on hostname | Removed 3 old backup(s) |
+| **DB Retention Warning** | DB Retention Cleanup Warning on hostname | Removed: 2, Errors: 1 |
+| **DB Retention Failed** | DB Retention Cleanup Failed on hostname | Could not calculate cutoff time |
+| **Files Retention Success** | Files Retention Cleanup on hostname | Removed 2 old backup(s) |
+| **Files Retention Warning** | Files Retention Cleanup Warning on hostname | Removed: 1, Errors: 1 |
+| **Files Retention Failed** | Files Retention Cleanup Failed on hostname | Could not calculate cutoff time |
+
+### Setting Up ntfy
+
+1. **Create a topic:**
+   - Go to [ntfy.sh](https://ntfy.sh)
+   - Choose a unique topic name (e.g., `myserver-backups-a8x2k`)
+   - Keep this name secret - anyone with the name can subscribe
+
+2. **Subscribe on your devices:**
+   - Install the ntfy app (iOS/Android)
+   - Subscribe to your topic
+
+3. **Configure in the tool:**
+   ```
+   Manage schedules → Configure notifications
+   ```
+
+4. **Optional: Use authentication:**
+   - For private topics, create an account at ntfy.sh
+   - Generate an access token
+   - Enter the token during setup
+
+### Testing Notifications
+
+Run a manual backup to test notifications:
+
+```bash
+sudo backup-management  # Select "Run backup now"
+```
+
+You should receive a notification on your subscribed devices.
 
 ---
 
@@ -570,6 +773,12 @@ For automation or scripting, access the generated scripts directly:
 tail -f /etc/backup-management/logs/db_logfile.log
 ```
 
+**Log Rotation:**
+Logs are automatically rotated when they exceed 10MB:
+- Current log: `db_logfile.log`
+- Rotated logs: `db_logfile.log.1`, `db_logfile.log.2`, ... up to `.5`
+- Oldest logs are automatically deleted
+
 ---
 
 ## Advanced Configuration
@@ -584,7 +793,23 @@ DO_FILES="true"
 RCLONE_REMOTE="b2"
 RCLONE_DB_PATH="myserver/db-backups"
 RCLONE_FILES_PATH="myserver/file-backups"
+RETENTION_MINUTES="43200"
+RETENTION_DESC="30 days"
 ```
+
+### Retention Values
+
+| Description | RETENTION_MINUTES |
+|-------------|-------------------|
+| 1 minute | 1 |
+| 1 hour | 60 |
+| 7 days | 10080 |
+| 14 days | 20160 |
+| 30 days | 43200 |
+| 60 days | 86400 |
+| 90 days | 129600 |
+| 365 days | 525600 |
+| Disabled | 0 |
 
 ### Secure Credentials Location
 
@@ -635,11 +860,28 @@ The generated scripts are fully customizable:
 
 ### Backup Strategy
 
-| Data Type | Frequency | Retention |
-|-----------|-----------|-----------|
-| Databases | Hourly | 7 days |
+| Data Type | Frequency | Recommended Retention |
+|-----------|-----------|----------------------|
+| Databases | Hourly | 7-14 days |
 | Files | Daily | 30 days |
 | Full snapshot | Weekly | 90 days |
+
+### Retention Recommendations
+
+| Use Case | Retention Period |
+|----------|------------------|
+| Development/Testing | 7 days |
+| Production (standard) | 30 days |
+| Production (compliance) | 90 days |
+| Archival/Legal | 365 days |
+
+**Testing Retention:**
+Use the 1-minute option to verify cleanup works:
+1. Set retention to 1 minute
+2. Run a backup
+3. Wait 2 minutes
+4. Run another backup → first backup should be deleted
+5. Change retention back to your desired period
 
 ### Security Recommendations
 
@@ -659,10 +901,11 @@ The generated scripts are fully customizable:
 
 ### Storage Management
 
-Set up lifecycle rules on your cloud storage:
-- Delete database backups older than 7-14 days
-- Delete file backups older than 30-60 days
-- Move older backups to cold storage for cost savings
+The tool now handles retention automatically! Configure your retention policy in the setup wizard or via "Manage schedules".
+
+For additional cost savings, configure lifecycle rules on your cloud storage:
+- Move older backups to cold storage (Glacier, B2 cold, etc.)
+- Set up cross-region replication for critical backups
 
 ---
 
@@ -689,11 +932,27 @@ tail -100 /etc/backup-management/logs/files_logfile.log
 2. **Corrupted backup**: Try an older backup
 3. **Network issues**: Check rclone connectivity
 
+### Retention/Cleanup Issues
+
+1. **Cleanup not running**: Verify `RETENTION_MINUTES` is set in config (not 0)
+2. **Files not being deleted**: Check rclone permissions on cloud storage
+3. **Wrong files deleted**: Verify the file pattern matches (e.g., `*-db_backups-*.tar.gz.gpg`)
+4. **Cleanup errors**: Check logs for specific rclone errors
+
+**Test cleanup manually:**
+```bash
+# List files that would be cleaned (without deleting)
+rclone lsf remote:path --include "*.tar.gz.gpg"
+
+# Check file modification times
+rclone lsl remote:path/filename
+```
+
 ### Getting Help
 
 1. Check the logs in `/etc/backup-management/logs/`
 2. Run `rclone` commands manually to test
-3. Review [GitHub Issues](https://github.com/wnstify/backup-management-tool/issues)
+3. Review [GitHub Issues](https://github.com/webnestify/backup-management/issues)
 4. Contact support at [webnestify.cloud](https://webnestify.cloud)
 
 ---
