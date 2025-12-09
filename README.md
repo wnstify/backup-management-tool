@@ -140,7 +140,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.0.0                ║
+║              Backup Management Tool v1.1.0                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
@@ -373,6 +373,7 @@ You'll be asked whether to keep or remove configuration and secrets.
 
 ## Documentation
 
+- [CHANGELOG.md](CHANGELOG.md) — Version history and changes
 - [USAGE.md](USAGE.md) — Detailed usage guide
 - [DISCLAIMER.md](DISCLAIMER.md) — Legal disclaimer and responsibilities
 
