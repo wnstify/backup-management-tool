@@ -15,7 +15,7 @@
 # ============================================================================
 set -euo pipefail
 
-VERSION="1.1.1"
+VERSION="1.2.0"
 AUTHOR="Webnestify"
 WEBSITE="https://webnestify.cloud"
 INSTALL_DIR="/etc/backup-management"
@@ -517,6 +517,15 @@ show_status() {
     print_warning "Files backup: NOT SCHEDULED"
   fi
   
+  # Integrity check schedule
+  if systemctl is-enabled backup-management-verify.timer &>/dev/null; then
+    local verify_schedule
+    verify_schedule=$(grep -E "^OnCalendar=" /etc/systemd/system/backup-management-verify.timer 2>/dev/null | cut -d'=' -f2)
+    print_success "Integrity check (systemd): $verify_schedule"
+  else
+    echo -e "  ${YELLOW}Integrity check: NOT SCHEDULED (optional)${NC}"
+  fi
+  
   # Retention policy
   echo
   echo "Retention Policy:"
@@ -626,9 +635,10 @@ run_backup() {
   echo "2. Run files backup"
   echo "3. Run both (database + files)"
   echo "4. Run cleanup now (remove old backups)"
-  echo "5. Back to main menu"
+  echo "5. Verify backup integrity"
+  echo "6. Back to main menu"
   echo
-  read -p "Select option [1-5]: " backup_choice
+  read -p "Select option [1-6]: " backup_choice
   
   case "$backup_choice" in
     1)
@@ -678,7 +688,10 @@ run_backup() {
     4)
       run_cleanup_now
       ;;
-    5|*)
+    5)
+      verify_backup_integrity
+      ;;
+    6|*)
       return
       ;;
   esac
@@ -747,6 +760,8 @@ run_cleanup_now() {
           delete_output=$(rclone delete "$rclone_remote:$rclone_db_path/$remote_file" 2>&1)
           if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+            # Also delete corresponding checksum file
+            rclone delete "$rclone_remote:$rclone_db_path/${remote_file}.sha256" 2>/dev/null || true
           else
             print_error "  Failed to delete $remote_file: $delete_output"
             ((cleanup_errors++)) || true
@@ -769,13 +784,15 @@ run_cleanup_now() {
           delete_output=$(rclone delete "$rclone_remote:$rclone_files_path/$remote_file" 2>&1)
           if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+            # Also delete corresponding checksum file
+            rclone delete "$rclone_remote:$rclone_files_path/${remote_file}.sha256" 2>/dev/null || true
           else
             print_error "  Failed to delete $remote_file: $delete_output"
             ((cleanup_errors++)) || true
           fi
         fi
       fi
-    done < <(rclone lsf "$rclone_remote:$rclone_files_path" --include "*.tar.gz" 2>&1)
+    done < <(rclone lsf "$rclone_remote:$rclone_files_path" --include "*.tar.gz" --exclude "*.sha256" 2>&1)
   fi
   
   echo
@@ -784,6 +801,247 @@ run_cleanup_now() {
   else
     print_success "Cleanup complete. Removed $cleanup_count old backup(s)."
   fi
+  press_enter_to_continue
+}
+
+# ---------- Verify Backup Integrity ----------
+
+verify_backup_integrity() {
+  print_header
+  echo "Verify Backup Integrity"
+  echo "======================="
+  echo
+  echo "This will download and verify backups without restoring them."
+  echo "It checks: checksum, decryption, and archive contents."
+  echo
+  echo "1. Verify database backup"
+  echo "2. Verify files backup"
+  echo "3. Verify both"
+  echo "4. Back"
+  echo
+  read -p "Select option [1-4]: " verify_choice
+  
+  [[ "$verify_choice" == "4" || -z "$verify_choice" ]] && return
+  
+  local secrets_dir rclone_remote rclone_db_path rclone_files_path
+  secrets_dir="$(get_secrets_dir)"
+  rclone_remote="$(get_config_value 'RCLONE_REMOTE')"
+  rclone_db_path="$(get_config_value 'RCLONE_DB_PATH')"
+  rclone_files_path="$(get_config_value 'RCLONE_FILES_PATH')"
+  
+  local db_result="SKIPPED" files_result="SKIPPED"
+  local db_details="" files_details=""
+  
+  # Create temp directory
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  trap "rm -rf '$temp_dir'" RETURN
+  
+  # Verify database backup
+  if [[ "$verify_choice" == "1" || "$verify_choice" == "3" ]]; then
+    echo
+    echo "═══════════════════════════════════════"
+    echo "Verifying Database Backup"
+    echo "═══════════════════════════════════════"
+    echo
+    
+    # Get latest DB backup
+    echo "Fetching latest database backup..."
+    local latest_db
+    latest_db=$(rclone lsf "$rclone_remote:$rclone_db_path" --include "*-db_backups-*.tar.gz.gpg" 2>/dev/null | sort -r | head -1)
+    
+    if [[ -z "$latest_db" ]]; then
+      print_error "No database backups found"
+      db_result="FAILED"
+      db_details="No backups found"
+    else
+      echo "Latest backup: $latest_db"
+      
+      # Download backup
+      echo "Downloading backup..."
+      if ! rclone copy "$rclone_remote:$rclone_db_path/$latest_db" "$temp_dir/" --progress; then
+        print_error "Download failed"
+        db_result="FAILED"
+        db_details="Download failed"
+      else
+        # Download checksum if exists
+        local checksum_file="${latest_db}.sha256"
+        rclone copy "$rclone_remote:$rclone_db_path/$checksum_file" "$temp_dir/" 2>/dev/null
+        
+        # Verify checksum
+        if [[ -f "$temp_dir/$checksum_file" ]]; then
+          echo "Verifying checksum..."
+          local stored_checksum calculated_checksum
+          stored_checksum=$(cat "$temp_dir/$checksum_file")
+          calculated_checksum=$(sha256sum "$temp_dir/$latest_db" | awk '{print $1}')
+          
+          if [[ "$stored_checksum" == "$calculated_checksum" ]]; then
+            print_success "Checksum verified"
+          else
+            print_error "Checksum mismatch!"
+            echo "  Expected: $stored_checksum"
+            echo "  Got:      $calculated_checksum"
+            db_result="FAILED"
+            db_details="Checksum mismatch"
+          fi
+        else
+          print_warning "No checksum file found (backup may predate checksum feature)"
+        fi
+        
+        # Test decryption if checksum passed or no checksum
+        if [[ "$db_result" != "FAILED" ]]; then
+          echo "Testing decryption..."
+          echo
+          read -s -p "Enter encryption password: " passphrase
+          echo
+          
+          if gpg --batch --quiet --pinentry-mode=loopback --passphrase "$passphrase" -d "$temp_dir/$latest_db" 2>/dev/null | tar -tzf - >/dev/null 2>&1; then
+            print_success "Decryption and archive verified"
+            
+            # List contents
+            echo
+            echo "Archive contents:"
+            gpg --batch --quiet --pinentry-mode=loopback --passphrase "$passphrase" -d "$temp_dir/$latest_db" 2>/dev/null | tar -tzf - 2>/dev/null | head -20
+            local file_count
+            file_count=$(gpg --batch --quiet --pinentry-mode=loopback --passphrase "$passphrase" -d "$temp_dir/$latest_db" 2>/dev/null | tar -tzf - 2>/dev/null | wc -l)
+            echo "... ($file_count files total)"
+            
+            db_result="PASSED"
+            db_details="$latest_db - $file_count files"
+          else
+            print_error "Decryption or archive verification failed"
+            db_result="FAILED"
+            db_details="Decryption failed - wrong password?"
+          fi
+        fi
+      fi
+    fi
+  fi
+  
+  # Verify files backup
+  if [[ "$verify_choice" == "2" || "$verify_choice" == "3" ]]; then
+    echo
+    echo "═══════════════════════════════════════"
+    echo "Verifying Files Backup"
+    echo "═══════════════════════════════════════"
+    echo
+    
+    # Get latest files backup
+    echo "Fetching latest files backup..."
+    local latest_files
+    latest_files=$(rclone lsf "$rclone_remote:$rclone_files_path" --include "*.tar.gz" --exclude "*.sha256" 2>/dev/null | sort -r | head -1)
+    
+    if [[ -z "$latest_files" ]]; then
+      print_error "No files backups found"
+      files_result="FAILED"
+      files_details="No backups found"
+    else
+      echo "Latest backup: $latest_files"
+      
+      # Download backup
+      echo "Downloading backup..."
+      if ! rclone copy "$rclone_remote:$rclone_files_path/$latest_files" "$temp_dir/" --progress; then
+        print_error "Download failed"
+        files_result="FAILED"
+        files_details="Download failed"
+      else
+        # Download checksum if exists
+        local checksum_file="${latest_files}.sha256"
+        rclone copy "$rclone_remote:$rclone_files_path/$checksum_file" "$temp_dir/" 2>/dev/null
+        
+        # Verify checksum
+        if [[ -f "$temp_dir/$checksum_file" ]]; then
+          echo "Verifying checksum..."
+          local stored_checksum calculated_checksum
+          stored_checksum=$(cat "$temp_dir/$checksum_file")
+          calculated_checksum=$(sha256sum "$temp_dir/$latest_files" | awk '{print $1}')
+          
+          if [[ "$stored_checksum" == "$calculated_checksum" ]]; then
+            print_success "Checksum verified"
+          else
+            print_error "Checksum mismatch!"
+            echo "  Expected: $stored_checksum"
+            echo "  Got:      $calculated_checksum"
+            files_result="FAILED"
+            files_details="Checksum mismatch"
+          fi
+        else
+          print_warning "No checksum file found (backup may predate checksum feature)"
+        fi
+        
+        # Test archive integrity if checksum passed or no checksum
+        if [[ "$files_result" != "FAILED" ]]; then
+          echo "Testing archive integrity..."
+          
+          if tar -tzf "$temp_dir/$latest_files" >/dev/null 2>&1; then
+            print_success "Archive verified"
+            
+            # List contents
+            echo
+            echo "Archive contents:"
+            tar -tzf "$temp_dir/$latest_files" 2>/dev/null | head -20
+            local file_count
+            file_count=$(tar -tzf "$temp_dir/$latest_files" 2>/dev/null | wc -l)
+            echo "... ($file_count files total)"
+            
+            files_result="PASSED"
+            files_details="$latest_files - $file_count files"
+          else
+            print_error "Archive verification failed - file may be corrupted"
+            files_result="FAILED"
+            files_details="Archive corrupted"
+          fi
+        fi
+      fi
+    fi
+  fi
+  
+  # Summary
+  echo
+  echo "═══════════════════════════════════════"
+  echo "Verification Summary"
+  echo "═══════════════════════════════════════"
+  echo
+  
+  if [[ "$db_result" != "SKIPPED" ]]; then
+    if [[ "$db_result" == "PASSED" ]]; then
+      print_success "Database: PASSED - $db_details"
+    else
+      print_error "Database: FAILED - $db_details"
+    fi
+  fi
+  
+  if [[ "$files_result" != "SKIPPED" ]]; then
+    if [[ "$files_result" == "PASSED" ]]; then
+      print_success "Files: PASSED - $files_details"
+    else
+      print_error "Files: FAILED - $files_details"
+    fi
+  fi
+  
+  # Send notification
+  local ntfy_url ntfy_token
+  ntfy_url="$(get_secret "$secrets_dir" ".c5")"
+  ntfy_token="$(get_secret "$secrets_dir" ".c4")"
+  
+  if [[ -n "$ntfy_url" ]]; then
+    local notification_title notification_body
+    
+    if [[ "$db_result" == "FAILED" || "$files_result" == "FAILED" ]]; then
+      notification_title="⚠️ Backup Verification FAILED on $HOSTNAME"
+      notification_body="DB: $db_result, Files: $files_result"
+    else
+      notification_title="✓ Backup Verification PASSED on $HOSTNAME"
+      notification_body="DB: $db_result, Files: $files_result"
+    fi
+    
+    if [[ -n "$ntfy_token" ]]; then
+      curl -s -H "Authorization: Bearer $ntfy_token" -d "$notification_body" "$ntfy_url" -o /dev/null --max-time 10 || true
+    else
+      curl -s -d "$notification_body" "$ntfy_url" -o /dev/null --max-time 10 || true
+    fi
+  fi
+  
   press_enter_to_continue
 }
 
@@ -883,6 +1141,15 @@ manage_schedules() {
     print_warning "Files: NOT SCHEDULED"
   fi
   
+  # Check integrity check timer
+  if systemctl is-enabled backup-management-verify.timer &>/dev/null; then
+    local verify_schedule
+    verify_schedule=$(grep -E "^OnCalendar=" /etc/systemd/system/backup-management-verify.timer 2>/dev/null | cut -d'=' -f2)
+    print_success "Integrity check (systemd): $verify_schedule"
+  else
+    print_warning "Integrity check: NOT SCHEDULED (optional)"
+  fi
+  
   # Show retention policy
   echo
   local retention_desc
@@ -900,10 +1167,12 @@ manage_schedules() {
   echo "3. Disable database backup schedule"
   echo "4. Disable files backup schedule"
   echo "5. Change retention policy"
-  echo "6. View timer status"
-  echo "7. Back to main menu"
+  echo "6. Set/change integrity check schedule (optional)"
+  echo "7. Disable integrity check schedule"
+  echo "8. View timer status"
+  echo "9. Back to main menu"
   echo
-  read -p "Select option [1-7]: " schedule_choice
+  read -p "Select option [1-9]: " schedule_choice
   
   case "$schedule_choice" in
     1)
@@ -922,9 +1191,15 @@ manage_schedules() {
       change_retention_policy
       ;;
     6)
+      set_integrity_check_schedule
+      ;;
+    7)
+      disable_schedule "verify" "Integrity check"
+      ;;
+    8)
       view_timer_status
       ;;
-    7|*)
+    9|*)
       return
       ;;
   esac
@@ -1118,15 +1393,367 @@ disable_schedule() {
   systemctl stop "$timer_name" 2>/dev/null || true
   systemctl disable "$timer_name" 2>/dev/null || true
   
-  # Also remove cron entries
+  # Also remove cron entries (for db/files only, not verify)
   if [[ "$timer_type" == "db" ]]; then
     ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/db_backup.sh" ) | crontab - 2>/dev/null || true
-  else
+  elif [[ "$timer_type" == "files" ]]; then
     ( crontab -l 2>/dev/null | grep -Fv "$SCRIPTS_DIR/files_backup.sh" ) | crontab - 2>/dev/null || true
   fi
+  # verify type has no cron fallback, just systemd
   
-  print_success "$display_name backup schedule disabled."
+  print_success "$display_name schedule disabled."
   press_enter_to_continue
+}
+
+set_integrity_check_schedule() {
+  print_header
+  echo "Schedule Integrity Check"
+  echo "========================"
+  echo
+  echo "This will schedule automatic backup verification."
+  echo "It downloads the latest backup and verifies:"
+  echo "  • SHA256 checksum"
+  echo "  • Decryption (using stored passphrase)"
+  echo "  • Archive contents"
+  echo
+  echo "Results are logged and sent via notification (if configured)."
+  echo
+  
+  echo "Select schedule for integrity check:"
+  echo "1. Weekly (Sunday at 2 AM) - recommended"
+  echo "2. Weekly (Saturday at 3 AM)"
+  echo "3. Every 2 weeks (1st and 15th at 2 AM)"
+  echo "4. Monthly (1st day at 2 AM)"
+  echo "5. Daily at 4 AM (for critical systems)"
+  echo "6. Custom schedule"
+  echo "7. Cancel"
+  echo
+  read -p "Select option [1-7]: " verify_choice
+  
+  local on_calendar
+  case "$verify_choice" in
+    1) on_calendar="Sun *-*-* 02:00:00" ;;
+    2) on_calendar="Sat *-*-* 03:00:00" ;;
+    3) on_calendar="*-*-01,15 02:00:00" ;;
+    4) on_calendar="*-*-01 02:00:00" ;;
+    5) on_calendar="*-*-* 04:00:00" ;;
+    6)
+      echo
+      echo "Enter systemd OnCalendar expression."
+      echo "Examples:"
+      echo "  Sun *-*-* 02:00:00     - Every Sunday at 2 AM"
+      echo "  *-*-01 02:00:00        - First day of month at 2 AM"
+      echo "  Mon,Thu *-*-* 03:00:00 - Monday and Thursday at 3 AM"
+      echo
+      read -p "OnCalendar expression: " on_calendar
+      if [[ -z "$on_calendar" ]]; then
+        print_error "No schedule entered."
+        press_enter_to_continue
+        return
+      fi
+      ;;
+    7|*)
+      return
+      ;;
+  esac
+  
+  echo
+  echo "Generating verification script..."
+  
+  # Generate the verification script
+  generate_verify_script
+  
+  # Create systemd service
+  cat > /etc/systemd/system/backup-management-verify.service << EOF
+[Unit]
+Description=Backup Management - Integrity Verification
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$SCRIPTS_DIR/verify_backup.sh
+StandardOutput=journal
+StandardError=journal
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Create systemd timer
+  cat > /etc/systemd/system/backup-management-verify.timer << EOF
+[Unit]
+Description=Backup Management - Weekly Integrity Verification
+
+[Timer]
+OnCalendar=$on_calendar
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  # Enable and start timer
+  systemctl daemon-reload
+  systemctl enable backup-management-verify.timer
+  systemctl start backup-management-verify.timer
+  
+  echo
+  print_success "Integrity check scheduled: $on_calendar"
+  print_info "Script location: $SCRIPTS_DIR/verify_backup.sh"
+  print_info "Log location: $INSTALL_DIR/logs/verify_logfile.log"
+  press_enter_to_continue
+}
+
+generate_verify_script() {
+  local secrets_dir rclone_remote rclone_db_path rclone_files_path
+  secrets_dir="$(get_secrets_dir)"
+  rclone_remote="$(get_config_value 'RCLONE_REMOTE')"
+  rclone_db_path="$(get_config_value 'RCLONE_DB_PATH')"
+  rclone_files_path="$(get_config_value 'RCLONE_FILES_PATH')"
+  
+  cat > "$SCRIPTS_DIR/verify_backup.sh" << 'VERIFYEOF'
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$(dirname "$SCRIPT_DIR")"
+LOGS_DIR="%%LOGS_DIR%%"
+RCLONE_REMOTE="%%RCLONE_REMOTE%%"
+RCLONE_DB_PATH="%%RCLONE_DB_PATH%%"
+RCLONE_FILES_PATH="%%RCLONE_FILES_PATH%%"
+SECRETS_DIR="%%SECRETS_DIR%%"
+HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
+LOG_FILE="$LOGS_DIR/verify_logfile.log"
+
+SECRET_PASSPHRASE=".c1"
+SECRET_NTFY_TOKEN=".c4"
+SECRET_NTFY_URL=".c5"
+
+# Cleanup function
+TEMP_DIR=""
+cleanup() {
+  local exit_code=$?
+  [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]] && rm -rf "$TEMP_DIR"
+  exit $exit_code
+}
+trap cleanup EXIT INT TERM
+
+derive_key() {
+  local secrets_dir="$1"
+  local machine_id salt
+  if [[ -f /etc/machine-id ]]; then
+    machine_id="$(cat /etc/machine-id)"
+  elif [[ -f /var/lib/dbus/machine-id ]]; then
+    machine_id="$(cat /var/lib/dbus/machine-id)"
+  else
+    machine_id="$(hostname)$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo 'fallback')"
+  fi
+  salt="$(cat "$secrets_dir/.s")"
+  echo -n "${machine_id}${salt}" | sha256sum | cut -d' ' -f1
+}
+
+get_secret() {
+  local secrets_dir="$1" secret_name="$2" key
+  [[ ! -f "$secrets_dir/$secret_name" ]] && return 1
+  key="$(derive_key "$secrets_dir")"
+  openssl enc -aes-256-cbc -pbkdf2 -iter 100000 -d -salt -pass "pass:$key" -base64 -in "$secrets_dir/$secret_name" 2>/dev/null || echo ""
+}
+
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+send_notification() {
+  local title="$1" body="$2"
+  local ntfy_url ntfy_token
+  ntfy_url="$(get_secret "$SECRETS_DIR" "$SECRET_NTFY_URL")"
+  ntfy_token="$(get_secret "$SECRETS_DIR" "$SECRET_NTFY_TOKEN")"
+  [[ -z "$ntfy_url" ]] && return 0
+  if [[ -n "$ntfy_token" ]]; then
+    curl -s -H "Authorization: Bearer $ntfy_token" -H "Title: $title" -d "$body" "$ntfy_url" -o /dev/null --max-time 10 || true
+  else
+    curl -s -H "Title: $title" -d "$body" "$ntfy_url" -o /dev/null --max-time 10 || true
+  fi
+}
+
+# Log rotation
+rotate_log() {
+  local log_file="$1"
+  local max_size=$((10 * 1024 * 1024))  # 10MB
+  [[ ! -f "$log_file" ]] && return 0
+  local log_size
+  log_size=$(stat -c%s "$log_file" 2>/dev/null || echo 0)
+  if [[ "$log_size" -gt "$max_size" ]]; then
+    [[ -f "${log_file}.5" ]] && rm -f "${log_file}.5"
+    for ((i=4; i>=1; i--)); do
+      [[ -f "${log_file}.${i}" ]] && mv "${log_file}.${i}" "${log_file}.$((i+1))"
+    done
+    mv "$log_file" "${log_file}.1"
+  fi
+}
+
+# Main
+rotate_log "$LOG_FILE"
+TEMP_DIR=$(mktemp -d)
+
+log "==== INTEGRITY CHECK START ===="
+
+PASSPHRASE="$(get_secret "$SECRETS_DIR" "$SECRET_PASSPHRASE")"
+if [[ -z "$PASSPHRASE" ]]; then
+  log "[ERROR] Could not retrieve encryption passphrase"
+  send_notification "⚠️ Integrity Check FAILED on $HOSTNAME" "Could not retrieve encryption passphrase"
+  exit 1
+fi
+
+db_result="SKIPPED"
+db_details=""
+files_result="SKIPPED"
+files_details=""
+
+# Verify database backup
+if [[ -n "$RCLONE_DB_PATH" ]]; then
+  log "Checking database backup..."
+  latest_db=$(rclone lsf "$RCLONE_REMOTE:$RCLONE_DB_PATH" --include "*-db_backups-*.tar.gz.gpg" 2>/dev/null | sort -r | head -1)
+  
+  if [[ -z "$latest_db" ]]; then
+    log "[WARNING] No database backups found"
+    db_result="WARNING"
+    db_details="No backups found"
+  else
+    log "Latest: $latest_db"
+    
+    # Download
+    if ! rclone copy "$RCLONE_REMOTE:$RCLONE_DB_PATH/$latest_db" "$TEMP_DIR/" 2>&1 | tee -a "$LOG_FILE"; then
+      log "[ERROR] Download failed"
+      db_result="FAILED"
+      db_details="Download failed"
+    else
+      # Checksum verification
+      checksum_file="${latest_db}.sha256"
+      checksum_ok=true
+      if rclone copy "$RCLONE_REMOTE:$RCLONE_DB_PATH/$checksum_file" "$TEMP_DIR/" 2>/dev/null; then
+        stored=$(cat "$TEMP_DIR/$checksum_file")
+        calculated=$(sha256sum "$TEMP_DIR/$latest_db" | awk '{print $1}')
+        if [[ "$stored" == "$calculated" ]]; then
+          log "Checksum: OK"
+        else
+          log "[ERROR] Checksum mismatch!"
+          log "  Expected: $stored"
+          log "  Got:      $calculated"
+          db_result="FAILED"
+          db_details="Checksum mismatch"
+          checksum_ok=false
+        fi
+      else
+        log "[INFO] No checksum file (backup may predate checksum feature)"
+      fi
+      
+      # Decrypt test
+      if $checksum_ok; then
+        if gpg --batch --quiet --pinentry-mode=loopback --passphrase "$PASSPHRASE" -d "$TEMP_DIR/$latest_db" 2>/dev/null | tar -tzf - >/dev/null 2>&1; then
+          file_count=$(gpg --batch --quiet --pinentry-mode=loopback --passphrase "$PASSPHRASE" -d "$TEMP_DIR/$latest_db" 2>/dev/null | tar -tzf - 2>/dev/null | wc -l)
+          log "Decryption: OK ($file_count files)"
+          db_result="PASSED"
+          db_details="$file_count files"
+        else
+          log "[ERROR] Decryption or archive verification failed"
+          db_result="FAILED"
+          db_details="Decryption failed"
+        fi
+      fi
+    fi
+    rm -f "$TEMP_DIR/$latest_db" "$TEMP_DIR/$checksum_file" 2>/dev/null
+  fi
+fi
+
+# Verify files backup
+if [[ -n "$RCLONE_FILES_PATH" ]]; then
+  log "Checking files backup..."
+  latest_files=$(rclone lsf "$RCLONE_REMOTE:$RCLONE_FILES_PATH" --include "*.tar.gz" --exclude "*.sha256" 2>/dev/null | sort -r | head -1)
+  
+  if [[ -z "$latest_files" ]]; then
+    log "[WARNING] No files backups found"
+    files_result="WARNING"
+    files_details="No backups found"
+  else
+    log "Latest: $latest_files"
+    
+    # Download
+    if ! rclone copy "$RCLONE_REMOTE:$RCLONE_FILES_PATH/$latest_files" "$TEMP_DIR/" 2>&1 | tee -a "$LOG_FILE"; then
+      log "[ERROR] Download failed"
+      files_result="FAILED"
+      files_details="Download failed"
+    else
+      # Checksum verification
+      checksum_file="${latest_files}.sha256"
+      checksum_ok=true
+      if rclone copy "$RCLONE_REMOTE:$RCLONE_FILES_PATH/$checksum_file" "$TEMP_DIR/" 2>/dev/null; then
+        stored=$(cat "$TEMP_DIR/$checksum_file")
+        calculated=$(sha256sum "$TEMP_DIR/$latest_files" | awk '{print $1}')
+        if [[ "$stored" == "$calculated" ]]; then
+          log "Checksum: OK"
+        else
+          log "[ERROR] Checksum mismatch!"
+          files_result="FAILED"
+          files_details="Checksum mismatch"
+          checksum_ok=false
+        fi
+      else
+        log "[INFO] No checksum file"
+      fi
+      
+      # Archive test
+      if $checksum_ok; then
+        if tar -tzf "$TEMP_DIR/$latest_files" >/dev/null 2>&1; then
+          file_count=$(tar -tzf "$TEMP_DIR/$latest_files" 2>/dev/null | wc -l)
+          log "Archive: OK ($file_count files)"
+          files_result="PASSED"
+          files_details="$file_count files"
+        else
+          log "[ERROR] Archive verification failed"
+          files_result="FAILED"
+          files_details="Archive corrupted"
+        fi
+      fi
+    fi
+    rm -f "$TEMP_DIR/$latest_files" "$TEMP_DIR/$checksum_file" 2>/dev/null
+  fi
+fi
+
+# Summary
+log "==== SUMMARY ===="
+log "Database: $db_result ${db_details:+- $db_details}"
+log "Files: $files_result ${files_details:+- $files_details}"
+log "==== INTEGRITY CHECK END ===="
+
+# Send notification
+if [[ "$db_result" == "FAILED" || "$files_result" == "FAILED" ]]; then
+  send_notification "⚠️ Integrity Check FAILED on $HOSTNAME" "DB: $db_result, Files: $files_result"
+  exit 1
+elif [[ "$db_result" == "WARNING" || "$files_result" == "WARNING" ]]; then
+  send_notification "⚠️ Integrity Check WARNING on $HOSTNAME" "DB: $db_result, Files: $files_result"
+else
+  send_notification "✓ Integrity Check PASSED on $HOSTNAME" "DB: $db_result ($db_details), Files: $files_result ($files_details)"
+fi
+
+exit 0
+VERIFYEOF
+
+  # Replace placeholders
+  sed -i \
+    -e "s|%%LOGS_DIR%%|$INSTALL_DIR/logs|g" \
+    -e "s|%%RCLONE_REMOTE%%|$rclone_remote|g" \
+    -e "s|%%RCLONE_DB_PATH%%|$rclone_db_path|g" \
+    -e "s|%%RCLONE_FILES_PATH%%|$rclone_files_path|g" \
+    -e "s|%%SECRETS_DIR%%|$secrets_dir|g" \
+    "$SCRIPTS_DIR/verify_backup.sh"
+  
+  chmod 700 "$SCRIPTS_DIR/verify_backup.sh"
 }
 
 view_timer_status() {
@@ -1141,6 +1768,10 @@ view_timer_status() {
   
   echo -e "${CYAN}Files Backup Timer:${NC}"
   systemctl status backup-management-files.timer --no-pager 2>/dev/null || echo "  Not installed or not running"
+  echo
+  
+  echo -e "${CYAN}Integrity Check Timer:${NC}"
+  systemctl status backup-management-verify.timer --no-pager 2>/dev/null || echo "  Not installed or not running"
   echo
   
   echo -e "${CYAN}Next scheduled runs:${NC}"
@@ -1727,6 +2358,12 @@ if ! gpg --batch --quiet --pinentry-mode=loopback --passphrase "$PASSPHRASE" -d 
 fi
 echo "Archive verified."
 
+# Generate checksum
+echo "Generating checksum..."
+CHECKSUM_FILE="${ARCHIVE}.sha256"
+sha256sum "$ARCHIVE" | awk '{print $1}' > "$CHECKSUM_FILE"
+echo "Checksum: $(cat "$CHECKSUM_FILE")"
+
 # Upload with timeout and retry
 echo "Uploading to remote storage..."
 RCLONE_TIMEOUT=1800  # 30 minutes
@@ -1734,6 +2371,11 @@ if ! timeout $RCLONE_TIMEOUT rclone copy "$ARCHIVE" "$RCLONE_REMOTE:$RCLONE_PATH
   echo "[ERROR] Upload failed"
   [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Failed on $HOSTNAME" "Upload failed"
   exit 8
+fi
+
+# Upload checksum file
+if ! timeout 60 rclone copy "$CHECKSUM_FILE" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3; then
+  echo "[WARNING] Checksum upload failed, but backup succeeded"
 fi
 
 # Verify upload
@@ -1763,6 +2405,8 @@ if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
           delete_output=$(rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>&1)
           if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+            # Also delete corresponding checksum file
+            rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/${remote_file}.sha256" 2>/dev/null || true
           else
             echo "  [ERROR] Failed to delete $remote_file: $delete_output"
             ((cleanup_errors++)) || true
@@ -1918,6 +2562,25 @@ SELECTED="${ALL_BACKUPS[$((sel-1))]}"
 echo
 echo "$LOG_PREFIX Downloading $SELECTED..."
 rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$SELECTED" "$TEMP_DIR/" --progress
+
+# Download and verify checksum if available
+CHECKSUM_FILE="${SELECTED}.sha256"
+if rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$CHECKSUM_FILE" "$TEMP_DIR/" 2>/dev/null; then
+  echo "$LOG_PREFIX Verifying checksum..."
+  STORED_CHECKSUM=$(cat "$TEMP_DIR/$CHECKSUM_FILE")
+  CALCULATED_CHECKSUM=$(sha256sum "$TEMP_DIR/$SELECTED" | awk '{print $1}')
+  if [[ "$STORED_CHECKSUM" == "$CALCULATED_CHECKSUM" ]]; then
+    echo "$LOG_PREFIX ✓ Checksum verified"
+  else
+    echo "$LOG_PREFIX [ERROR] Checksum mismatch! Backup may be corrupted."
+    echo "$LOG_PREFIX   Expected: $STORED_CHECKSUM"
+    echo "$LOG_PREFIX   Got:      $CALCULATED_CHECKSUM"
+    read -p "Continue anyway? (y/N): " continue_anyway
+    [[ ! "$continue_anyway" =~ ^[Yy]$ ]] && exit 1
+  fi
+else
+  echo "$LOG_PREFIX [INFO] No checksum file found (backup may predate checksum feature)"
+fi
 
 echo "$LOG_PREFIX Decrypting..."
 EXTRACT_DIR="$TEMP_DIR/extracted"
@@ -2166,12 +2829,21 @@ for site_path in "$WWW_DIR"/*/; do
   [[ ! -f "$archive_path" ]] && { echo "$LOG_PREFIX [$site_name] Archive file not created"; failures+=("$site_name"); continue; }
   
   echo "$LOG_PREFIX [$site_name] Uploading..."
+  
+  # Generate checksum
+  checksum_file="${archive_path}.sha256"
+  sha256sum "$archive_path" | awk '{print $1}' > "$checksum_file"
+  echo "$LOG_PREFIX [$site_name] Checksum: $(cat "$checksum_file")"
+  
   if timeout 3600 rclone copy "$archive_path" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 --low-level-retries 10; then
-    rm -f "$archive_path"
+    # Upload checksum file
+    timeout 60 rclone copy "$checksum_file" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 || echo "$LOG_PREFIX [$site_name] Checksum upload failed (backup OK)"
+    rm -f "$archive_path" "$checksum_file"
     ((success_count++)) || true
     echo "$LOG_PREFIX [$site_name] Done"
   else
     echo "$LOG_PREFIX [$site_name] Upload failed"
+    rm -f "$checksum_file"
     failures+=("$site_name")
   fi
 done
@@ -2203,13 +2875,15 @@ if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
           delete_output=$(rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>&1)
           if [[ $? -eq 0 ]]; then
             ((cleanup_count++)) || true
+            # Also delete corresponding checksum file
+            rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/${remote_file}.sha256" 2>/dev/null || true
           else
             echo "$LOG_PREFIX   [ERROR] Failed to delete $remote_file: $delete_output"
             ((cleanup_errors++)) || true
           fi
         fi
       fi
-    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" 2>&1)
+    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" --exclude "*.sha256" 2>&1)
     
     if [[ $cleanup_errors -gt 0 ]]; then
       echo "$LOG_PREFIX [WARNING] Retention cleanup completed with $cleanup_errors error(s). Removed $cleanup_count old backup(s)."
@@ -2287,7 +2961,7 @@ echo "---------------------"
 echo "$LOG_PREFIX Fetching backups from $RCLONE_REMOTE:$RCLONE_PATH..."
 
 declare -a ALL_BACKUPS=()
-remote_files="$(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" 2>/dev/null | sort -r)" || true
+remote_files="$(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" --exclude "*.sha256" 2>/dev/null | sort -r)" || true
 while IFS= read -r f; do [[ -n "$f" ]] && ALL_BACKUPS+=("$f"); done <<< "$remote_files"
 
 echo "$LOG_PREFIX Found ${#ALL_BACKUPS[@]} backup(s)."
@@ -2308,6 +2982,25 @@ echo
 echo "$LOG_PREFIX Downloading $SELECTED..."
 rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$SELECTED" "$TEMP_DIR/" --progress
 BACKUP_FILE="$TEMP_DIR/$SELECTED"
+
+# Download and verify checksum if available
+CHECKSUM_FILE="${SELECTED}.sha256"
+if rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$CHECKSUM_FILE" "$TEMP_DIR/" 2>/dev/null; then
+  echo "$LOG_PREFIX Verifying checksum..."
+  STORED_CHECKSUM=$(cat "$TEMP_DIR/$CHECKSUM_FILE")
+  CALCULATED_CHECKSUM=$(sha256sum "$BACKUP_FILE" | awk '{print $1}')
+  if [[ "$STORED_CHECKSUM" == "$CALCULATED_CHECKSUM" ]]; then
+    echo "$LOG_PREFIX ✓ Checksum verified"
+  else
+    echo "$LOG_PREFIX [ERROR] Checksum mismatch! Backup may be corrupted."
+    echo "$LOG_PREFIX   Expected: $STORED_CHECKSUM"
+    echo "$LOG_PREFIX   Got:      $CALCULATED_CHECKSUM"
+    read -p "Continue anyway? (y/N): " continue_anyway
+    [[ ! "$continue_anyway" =~ ^[Yy]$ ]] && exit 1
+  fi
+else
+  echo "$LOG_PREFIX [INFO] No checksum file found (backup may predate checksum feature)"
+fi
 
 echo
 echo "Step 2: Select Sites"
