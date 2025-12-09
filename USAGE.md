@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.1.1** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.2.0** by Webnestify.
 
 ## Table of Contents
 
@@ -10,6 +10,7 @@ Complete usage documentation for **Backup Management Tool v1.1.1** by Webnestify
 - [Setup Wizard](#setup-wizard)
 - [Running Backups](#running-backups)
 - [Retention & Cleanup](#retention--cleanup)
+- [Integrity Verification](#integrity-verification)
 - [Restoring Backups](#restoring-backups)
 - [Managing Schedules](#managing-schedules)
 - [Viewing Status & Logs](#viewing-status--logs)
@@ -74,7 +75,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.1.1
+       Backup Management Tool v1.2.0
                   by Webnestify
 ========================================================
 
@@ -105,7 +106,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.1.1
+       Backup Management Tool v1.2.0
                   by Webnestify
 ========================================================
 
@@ -328,9 +329,10 @@ Run Backup
 2. Run files backup
 3. Run both (database + files)
 4. Run cleanup now (remove old backups)
-5. Back to main menu
+5. Verify backup integrity
+6. Back to main menu
 
-Select option [1-5]:
+Select option [1-6]:
 ```
 
 ### Manual Backup Progress
@@ -343,6 +345,9 @@ Select option [1-5]:
   → Dumping: wordpress_site2
     OK: wordpress_site2
 Archive verified.
+Generating checksum...
+Checksum: a1b2c3d4e5f6...
+Uploading to remote storage...
 Uploaded to b2:myserver/db-backups
 Running retention cleanup (keeping backups newer than 43200 minutes)...
   Deleting old backup: myserver-db_backups-2024-12-01-0300.tar.gz.gpg
@@ -355,9 +360,13 @@ Retention cleanup complete. Removed 1 old backup(s).
 ==== 2025-01-15 03:00:01 START files backup ====
 [FILES-BACKUP] Scanning /var/www...
 [FILES-BACKUP] [site1.com] Archiving...
+[FILES-BACKUP] [site1.com] Checksum: f1e2d3c4b5a6...
 [FILES-BACKUP] [site1.com] Uploading...
+[FILES-BACKUP] [site1.com] Done
 [FILES-BACKUP] [site2.com] Archiving...
+[FILES-BACKUP] [site2.com] Checksum: 9a8b7c6d5e4f...
 [FILES-BACKUP] [site2.com] Uploading...
+[FILES-BACKUP] [site2.com] Done
 [FILES-BACKUP] Running retention cleanup (keeping backups newer than 43200 minutes)...
 [FILES-BACKUP] Retention cleanup complete. No old backups to remove.
 ==== 2025-01-15 03:05:32 END (success) ====
@@ -454,6 +463,189 @@ Manage schedules → Change retention policy
 ```
 
 This regenerates the backup scripts with the new retention value.
+
+---
+
+## Integrity Verification
+
+The tool provides comprehensive backup integrity verification to ensure your backups are not corrupted and can be successfully restored.
+
+### SHA256 Checksums
+
+Every backup automatically generates a SHA256 checksum:
+
+```
+Generating checksum...
+Checksum: a1b2c3d4e5f6789...
+```
+
+The checksum is stored alongside the backup as `backup-file.tar.gz.gpg.sha256`.
+
+### Verify Backup Integrity
+
+Test your backups without restoring them:
+
+```
+Verify Backup Integrity
+=======================
+
+This will download and verify backups without restoring them.
+It checks: checksum, decryption, and archive contents.
+
+1. Verify database backup
+2. Verify files backup
+3. Verify both
+4. Back
+
+Select option [1-4]:
+```
+
+**What it tests:**
+
+| Check | Database | Files |
+|-------|----------|-------|
+| Download | ✓ | ✓ |
+| Checksum verification | ✓ | ✓ |
+| Decryption test | ✓ | - |
+| Archive extraction test | ✓ | ✓ |
+| List contents | ✓ | ✓ |
+
+### Verification Output
+
+```
+═══════════════════════════════════════
+Verifying Database Backup
+═══════════════════════════════════════
+
+Latest backup: myserver-db_backups-2025-01-15-0300.tar.gz.gpg
+Downloading backup...
+Verifying checksum...
+✓ Checksum verified
+Testing decryption...
+Enter encryption password: ********
+✓ Decryption and archive verified
+
+Archive contents:
+mysql-server1-db_backups-2025-01-15-0300/
+mysql-server1-db_backups-2025-01-15-0300/wordpress_site1-2025-01-15-0300.sql.gz
+mysql-server1-db_backups-2025-01-15-0300/wordpress_site2-2025-01-15-0300.sql.gz
+... (15 files total)
+
+═══════════════════════════════════════
+Verification Summary
+═══════════════════════════════════════
+
+✓ Database: PASSED - myserver-db_backups-2025-01-15-0300.tar.gz.gpg - 15 files
+✓ Files: PASSED - https__site1.com-2025-01-15-0300.tar.gz - 1247 files
+```
+
+### Checksum Verification on Restore
+
+When restoring, checksums are automatically verified:
+
+```
+[DB-RESTORE] Downloading backup...
+[DB-RESTORE] Verifying checksum...
+[DB-RESTORE] ✓ Checksum verified
+[DB-RESTORE] Decrypting...
+```
+
+If checksum fails:
+
+```
+[DB-RESTORE] [ERROR] Checksum mismatch! Backup may be corrupted.
+[DB-RESTORE]   Expected: a1b2c3d4...
+[DB-RESTORE]   Got:      x9y8z7w6...
+Continue anyway? (y/N):
+```
+
+### Verification Notifications
+
+| Result | Notification |
+|--------|--------------|
+| All passed | "✓ Backup Verification PASSED on hostname - DB: PASSED, Files: PASSED" |
+| Any failed | "⚠️ Backup Verification FAILED on hostname - DB: FAILED, Files: PASSED" |
+
+### Scheduled Integrity Check (Optional)
+
+Automate verification with a weekly integrity check:
+
+```
+Manage schedules → Set/change integrity check schedule
+```
+
+```
+Schedule Integrity Check
+========================
+
+This will schedule automatic backup verification.
+It downloads the latest backup and verifies:
+  • SHA256 checksum
+  • Decryption (using stored passphrase)
+  • Archive contents
+
+Results are logged and sent via notification (if configured).
+
+Select schedule for integrity check:
+1. Weekly (Sunday at 2 AM) - recommended
+2. Weekly (Saturday at 3 AM)
+3. Every 2 weeks (1st and 15th at 2 AM)
+4. Monthly (1st day at 2 AM)
+5. Daily at 4 AM (for critical systems)
+6. Custom schedule
+7. Cancel
+```
+
+**How it differs from manual verification:**
+
+| | Manual (Menu) | Scheduled |
+|--|---------------|-----------|
+| **Password** | Asks you | Uses stored passphrase |
+| **Interaction** | Interactive | Fully automatic |
+| **When** | On-demand | Weekly/custom schedule |
+| **Output** | Screen | Log file + notification |
+
+**Log file location:**
+```
+/etc/backup-management/logs/verify_logfile.log
+```
+
+**Sample log output:**
+```
+[2025-01-19 02:00:01] ==== INTEGRITY CHECK START ====
+[2025-01-19 02:00:01] Checking database backup...
+[2025-01-19 02:00:01] Latest: myserver-db_backups-2025-01-15-0300.tar.gz.gpg
+[2025-01-19 02:00:15] Checksum: OK
+[2025-01-19 02:00:18] Decryption: OK (15 files)
+[2025-01-19 02:00:18] Checking files backup...
+[2025-01-19 02:00:18] Latest: https__site1.com-2025-01-15-0300.tar.gz
+[2025-01-19 02:00:45] Checksum: OK
+[2025-01-19 02:00:48] Archive: OK (1247 files)
+[2025-01-19 02:00:48] ==== SUMMARY ====
+[2025-01-19 02:00:48] Database: PASSED - 15 files
+[2025-01-19 02:00:48] Files: PASSED - 1247 files
+[2025-01-19 02:00:48] ==== INTEGRITY CHECK END ====
+```
+
+**Scheduled notifications:**
+
+| Result | Notification |
+|--------|--------------|
+| Passed | "✓ Integrity Check PASSED on hostname - DB: PASSED (15 files), Files: PASSED (1247 files)" |
+| Warning | "⚠️ Integrity Check WARNING on hostname - DB: WARNING, Files: PASSED" |
+| Failed | "⚠️ Integrity Check FAILED on hostname - DB: FAILED, Files: PASSED" |
+
+**Disable scheduled check:**
+```
+Manage schedules → Disable integrity check schedule
+```
+
+### Best Practices
+
+1. **Run verification weekly** — Catches corruption early
+2. **Test after major changes** — After server updates, storage changes
+3. **Verify before disaster** — Don't wait until you need to restore
+4. **Check the encryption password** — Verification proves you have the right password
 
 ---
 
@@ -556,6 +748,7 @@ Current Schedules:
 
 ✓ Database (systemd): *-*-* *:00:00
 ✓ Files (systemd): *-*-* 03:00:00
+✓ Integrity check (systemd): Sun *-*-* 02:00:00
 
 Retention Policy:
 ✓ Retention: 30 days
@@ -566,10 +759,12 @@ Options:
 3. Disable database backup schedule
 4. Disable files backup schedule
 5. Change retention policy
-6. View timer status
-7. Back to main menu
+6. Set/change integrity check schedule (optional)
+7. Disable integrity check schedule
+8. View timer status
+9. Back to main menu
 
-Select option [1-7]:
+Select option [1-9]:
 ```
 
 ### Schedule Options
@@ -583,6 +778,16 @@ Select option [1-7]:
 | Daily at 3 AM | `*-*-* 03:00:00` | Daily at 3 AM (recommended for files) |
 | Weekly | `Sun *-*-* 00:00:00` | Sundays at midnight |
 | Custom | Your expression | Any valid systemd OnCalendar expression |
+
+### Integrity Check Schedule Options
+
+| Option | Schedule | Use Case |
+|--------|----------|----------|
+| Weekly (Sunday 2 AM) | `Sun *-*-* 02:00:00` | Recommended for most users |
+| Weekly (Saturday 3 AM) | `Sat *-*-* 03:00:00` | Alternative day |
+| Bi-weekly | `*-*-01,15 02:00:00` | 1st and 15th of month |
+| Monthly | `*-*-01 02:00:00` | First day of month |
+| Daily | `*-*-* 04:00:00` | Critical systems only |
 
 ### Retention Options
 
@@ -617,6 +822,12 @@ backup-management-files.timer
   Active: active (waiting)
   Next: 2025-01-16 03:00:00 UTC
   Last: 2025-01-15 03:00:01 UTC
+
+backup-management-verify.timer
+  Loaded: loaded
+  Active: active (waiting)
+  Next: 2025-01-19 02:00:00 UTC
+  Last: 2025-01-12 02:00:01 UTC
 ```
 
 ### Custom Schedule Examples
@@ -669,6 +880,7 @@ Restore Scripts:
 Scheduled Backups (systemd timers):
 ✓ Database: *-*-* *:00:00 (hourly)
 ✓ Files: *-*-* 03:00:00 (daily at 3 AM)
+✓ Integrity check: Sun *-*-* 02:00:00 (weekly)
 
 Retention Policy:
 ✓ Retention: 30 days
@@ -691,6 +903,14 @@ Recent Backup Activity:
 ```
 Retention Policy:
 ⚠ Retention: No automatic cleanup
+```
+
+**Note:** Integrity check is optional and shows differently if not configured:
+```
+Scheduled Backups (systemd timers):
+✓ Database: *-*-* *:00:00 (hourly)
+✓ Files: *-*-* 03:00:00 (daily at 3 AM)
+  Integrity check: NOT SCHEDULED (optional)
 ```
 
 ### Viewing Logs
@@ -794,6 +1014,9 @@ For automation or scripting, access the generated scripts directly:
 
 # Run files restore (interactive)
 /etc/backup-management/scripts/files_restore.sh
+
+# Run integrity check (non-interactive, if configured)
+/etc/backup-management/scripts/verify_backup.sh
 ```
 
 ### Systemd Timer Management
@@ -807,6 +1030,7 @@ systemctl list-timers | grep backup-management
 # Check timer status
 systemctl status backup-management-db.timer
 systemctl status backup-management-files.timer
+systemctl status backup-management-verify.timer
 
 # Manually trigger a backup (via systemd)
 systemctl start backup-management-db.service
@@ -834,8 +1058,12 @@ systemctl start backup-management-db.timer
 # Files backup log
 /etc/backup-management/logs/files_logfile.log
 
+# Integrity check log (if scheduled)
+/etc/backup-management/logs/verify_logfile.log
+
 # Tail logs in real-time
 tail -f /etc/backup-management/logs/db_logfile.log
+tail -f /etc/backup-management/logs/verify_logfile.log
 ```
 
 **Log Rotation:**

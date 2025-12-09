@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2024-12-09
+
+### Added
+
+- **SHA256 Checksums**
+  - Every backup now generates a `.sha256` checksum file
+  - Checksum uploaded alongside backup to cloud storage
+  - Enables verification of backup integrity
+
+- **Verify Backup Integrity**
+  - New menu option: "Run backup now" → "Verify backup integrity"
+  - Downloads latest backup and verifies checksum
+  - Tests decryption (for database backups)
+  - Tests archive extraction (for files backups)
+  - Lists archive contents without restoring
+  - Sends notification with verification result
+
+- **Scheduled Integrity Check (Optional)**
+  - New menu option: "Manage schedules" → "Set/change integrity check schedule"
+  - Automatic weekly/monthly verification of backups
+  - Runs non-interactively using stored encryption passphrase
+  - Logs results to `/etc/backup-management/logs/verify_logfile.log`
+  - Sends notification with pass/fail status
+  - Schedule presets: Weekly, bi-weekly, monthly, daily, or custom
+
+- **Checksum Verification on Restore**
+  - Restore scripts now verify checksum before restoring
+  - Warning shown if checksum mismatch detected
+  - Option to continue anyway or abort
+
+### Changed
+
+- Manage Schedules menu now has 9 options (added integrity check schedule)
+- Retention cleanup also deletes corresponding `.sha256` files
+- Files backup listing excludes `.sha256` files
+
+### Security
+
+- Backups can now be verified for tampering/corruption
+- End-to-end integrity verification from upload to restore
+- Scheduled verification catches silent backup corruption early
+
+---
+
 ## [1.1.1] - 2024-12-09
 
 ### Added
@@ -138,6 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.2.0 | 2024-12-09 | Checksums, backup integrity verification |
 | 1.1.1 | 2024-12-09 | Retention cleanup notifications |
 | 1.1.0 | 2024-12-09 | Retention policy, security hardening, log rotation |
 | 1.0.0 | 2024-12-08 | Initial release |

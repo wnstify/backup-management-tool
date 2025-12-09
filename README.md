@@ -61,8 +61,9 @@ This tool provides exactly that.
 - ☁️ **Cloud Storage** — Supports 40+ providers via rclone (S3, B2, Wasabi, Google Drive, etc.)
 - ⏰ **Automated Scheduling** — Systemd timers with automatic retry and catch-up
 - 🧹 **Retention & Cleanup** — Configurable retention policy with automatic old backup deletion
+- ✅ **Integrity Verification** — SHA256 checksums, test restore, and optional scheduled checks
 - 🔔 **Notifications** — Optional alerts via ntfy.sh on backup completion/failure
-- 🔄 **Easy Restore** — Interactive restore wizard with safety backups
+- 🔄 **Easy Restore** — Interactive restore wizard with safety backups and checksum verification
 - 📋 **Detailed Logging** — Full logs with timestamps and automatic log rotation
 
 ---
@@ -140,7 +141,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.1.1                ║
+║              Backup Management Tool v1.2.0                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
