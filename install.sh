@@ -36,6 +36,27 @@ NC='\033[0m'
 # Track if dedicated user is set up
 USE_DEDICATED_USER=false
 
+# Helper function for prompts that works with piped input
+prompt_user() {
+    local prompt="$1"
+    local default="${2:-}"
+    local response=""
+    
+    if [[ -t 0 ]]; then
+        # Interactive mode - stdin is a tty
+        read -p "$prompt" response
+    elif [[ -e /dev/tty ]]; then
+        # Piped but tty available
+        read -p "$prompt" response < /dev/tty
+    else
+        # Non-interactive, no tty - use default
+        echo -e "${YELLOW}Non-interactive mode. Using default: ${default:-empty}${NC}"
+        response="$default"
+    fi
+    
+    echo "$response"
+}
+
 print_banner() {
     echo -e "${CYAN}"
     echo "╔═══════════════════════════════════════════════════════════╗"
@@ -152,7 +173,9 @@ ask_dedicated_user() {
     echo "    • Grants sudo access only for backup-management"
     echo "    • Systemd timers run as this user"
     echo ""
-    read -p "Create dedicated backup user? (Y/n): " create_user
+    
+    local create_user
+    create_user=$(prompt_user "Create dedicated backup user? (Y/n): " "Y")
     
     if [[ ! "$create_user" =~ ^[Nn]$ ]]; then
         USE_DEDICATED_USER=true
@@ -439,7 +462,8 @@ uninstall() {
     # Ask about dedicated user
     if id "$BACKUP_USER" &>/dev/null; then
         echo ""
-        read -p "Remove dedicated backup user (${BACKUP_USER})? (y/N): " remove_user
+        local remove_user
+        remove_user=$(prompt_user "Remove dedicated backup user (${BACKUP_USER})? (y/N): " "N")
         if [[ "$remove_user" =~ ^[Yy]$ ]]; then
             userdel -r "$BACKUP_USER" 2>/dev/null || true
             rm -f "$SUDOERS_FILE"
@@ -449,7 +473,8 @@ uninstall() {
     
     # Ask about config/secrets
     echo ""
-    read -p "Remove configuration and encrypted secrets? (y/N): " remove_config
+    local remove_config
+    remove_config=$(prompt_user "Remove configuration and encrypted secrets? (y/N): " "N")
     if [[ "$remove_config" =~ ^[Yy]$ ]]; then
         rm -rf "$INSTALL_DIR"
         # Try to find and remove secrets directory
