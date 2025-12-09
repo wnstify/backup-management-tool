@@ -15,7 +15,7 @@
 # ============================================================================
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 AUTHOR="Webnestify"
 WEBSITE="https://webnestify.cloud"
 INSTALL_DIR="/etc/backup-management"
@@ -517,6 +517,22 @@ show_status() {
     print_warning "Files backup: NOT SCHEDULED"
   fi
   
+  # Retention policy
+  echo
+  echo "Retention Policy:"
+  local retention_desc retention_minutes
+  retention_desc="$(get_config_value 'RETENTION_DESC')"
+  retention_minutes="$(get_config_value 'RETENTION_MINUTES')"
+  if [[ -n "$retention_desc" ]]; then
+    if [[ "$retention_minutes" -eq 0 ]]; then
+      print_warning "Retention: $retention_desc"
+    else
+      print_success "Retention: $retention_desc"
+    fi
+  else
+    print_warning "Retention: NOT CONFIGURED (no automatic cleanup)"
+  fi
+  
   # Check rclone
   echo
   echo "Remote Storage:"
@@ -609,9 +625,10 @@ run_backup() {
   echo "1. Run database backup"
   echo "2. Run files backup"
   echo "3. Run both (database + files)"
-  echo "4. Back to main menu"
+  echo "4. Run cleanup now (remove old backups)"
+  echo "5. Back to main menu"
   echo
-  read -p "Select option [1-4]: " backup_choice
+  read -p "Select option [1-5]: " backup_choice
   
   case "$backup_choice" in
     1)
@@ -658,10 +675,104 @@ run_backup() {
       fi
       press_enter_to_continue
       ;;
-    4|*)
+    4)
+      run_cleanup_now
+      ;;
+    5|*)
       return
       ;;
   esac
+}
+
+# ---------- Run Cleanup Now ----------
+
+run_cleanup_now() {
+  print_header
+  echo "Run Cleanup Now"
+  echo "==============="
+  echo
+  
+  local retention_minutes retention_desc
+  retention_minutes="$(get_config_value 'RETENTION_MINUTES')"
+  retention_desc="$(get_config_value 'RETENTION_DESC')"
+  
+  if [[ -z "$retention_minutes" ]] || [[ "$retention_minutes" -eq 0 ]]; then
+    print_warning "No retention policy configured (automatic cleanup disabled)"
+    echo
+    echo "To enable cleanup, go to: Manage schedules > Change retention policy"
+    press_enter_to_continue
+    return
+  fi
+  
+  echo "Current retention policy: $retention_desc"
+  echo
+  echo "This will delete backups older than $retention_minutes minutes."
+  echo
+  read -p "Continue? (y/N): " confirm
+  
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Cancelled."
+    press_enter_to_continue
+    return
+  fi
+  
+  local rclone_remote rclone_db_path rclone_files_path
+  rclone_remote="$(get_config_value 'RCLONE_REMOTE')"
+  rclone_db_path="$(get_config_value 'RCLONE_DB_PATH')"
+  rclone_files_path="$(get_config_value 'RCLONE_FILES_PATH')"
+  
+  local cutoff_time cleanup_count=0
+  cutoff_time=$(date -d "-$retention_minutes minutes" +%s 2>/dev/null || date -v-${retention_minutes}M +%s 2>/dev/null || echo 0)
+  
+  if [[ "$cutoff_time" -eq 0 ]]; then
+    print_error "Could not calculate cutoff time"
+    press_enter_to_continue
+    return
+  fi
+  
+  echo
+  echo "Cutoff time: $(date -d "@$cutoff_time" 2>/dev/null || date -r "$cutoff_time" 2>/dev/null)"
+  echo
+  
+  # Cleanup database backups
+  if [[ -n "$rclone_db_path" ]]; then
+    echo "Checking database backups at $rclone_remote:$rclone_db_path..."
+    while IFS= read -r remote_file; do
+      [[ -z "$remote_file" ]] && continue
+      file_time=$(rclone lsl "$rclone_remote:$rclone_db_path/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" ]]; then
+        file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
+        if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
+          echo "  Deleting: $remote_file ($(date -d "@$file_epoch" +"%Y-%m-%d %H:%M" 2>/dev/null))"
+          if rclone delete "$rclone_remote:$rclone_db_path/$remote_file" 2>/dev/null; then
+            ((cleanup_count++)) || true
+          fi
+        fi
+      fi
+    done < <(rclone lsf "$rclone_remote:$rclone_db_path" --include "*-db_backups-*.tar.gz.gpg" 2>/dev/null)
+  fi
+  
+  # Cleanup files backups
+  if [[ -n "$rclone_files_path" ]]; then
+    echo "Checking files backups at $rclone_remote:$rclone_files_path..."
+    while IFS= read -r remote_file; do
+      [[ -z "$remote_file" ]] && continue
+      file_time=$(rclone lsl "$rclone_remote:$rclone_files_path/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" ]]; then
+        file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
+        if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
+          echo "  Deleting: $remote_file ($(date -d "@$file_epoch" +"%Y-%m-%d %H:%M" 2>/dev/null))"
+          if rclone delete "$rclone_remote:$rclone_files_path/$remote_file" 2>/dev/null; then
+            ((cleanup_count++)) || true
+          fi
+        fi
+      fi
+    done < <(rclone lsf "$rclone_remote:$rclone_files_path" --include "*.tar.gz" 2>/dev/null)
+  fi
+  
+  echo
+  print_success "Cleanup complete. Removed $cleanup_count old backup(s)."
+  press_enter_to_continue
 }
 
 # ---------- Run Restore ----------
@@ -760,16 +871,27 @@ manage_schedules() {
     print_warning "Files: NOT SCHEDULED"
   fi
   
+  # Show retention policy
+  echo
+  local retention_desc
+  retention_desc="$(get_config_value 'RETENTION_DESC')"
+  if [[ -n "$retention_desc" ]]; then
+    print_success "Retention policy: $retention_desc"
+  else
+    print_warning "Retention policy: NOT CONFIGURED"
+  fi
+  
   echo
   echo "Options:"
   echo "1. Set/change database backup schedule"
   echo "2. Set/change files backup schedule"
   echo "3. Disable database backup schedule"
   echo "4. Disable files backup schedule"
-  echo "5. View timer status"
-  echo "6. Back to main menu"
+  echo "5. Change retention policy"
+  echo "6. View timer status"
+  echo "7. Back to main menu"
   echo
-  read -p "Select option [1-6]: " schedule_choice
+  read -p "Select option [1-7]: " schedule_choice
   
   case "$schedule_choice" in
     1)
@@ -785,12 +907,94 @@ manage_schedules() {
       disable_schedule "files" "Files"
       ;;
     5)
+      change_retention_policy
+      ;;
+    6)
       view_timer_status
       ;;
-    6|*)
+    7|*)
       return
       ;;
   esac
+}
+
+change_retention_policy() {
+  print_header
+  echo "Change Retention Policy"
+  echo "======================="
+  echo
+  
+  local current_retention
+  current_retention="$(get_config_value 'RETENTION_DESC')"
+  if [[ -n "$current_retention" ]]; then
+    echo "Current retention: $current_retention"
+  else
+    echo "Current retention: NOT CONFIGURED"
+  fi
+  
+  echo
+  echo "Select new retention period:"
+  echo
+  echo "  1) 1 minute (TESTING ONLY)"
+  echo "  2) 1 hour (TESTING)"
+  echo "  3) 7 days"
+  echo "  4) 14 days"
+  echo "  5) 30 days"
+  echo "  6) 60 days"
+  echo "  7) 90 days"
+  echo "  8) 365 days (1 year)"
+  echo "  9) No automatic cleanup"
+  echo "  0) Cancel"
+  echo
+  read -p "Select option [0-9]: " RETENTION_CHOICE
+  
+  [[ "$RETENTION_CHOICE" == "0" ]] && return
+  
+  local RETENTION_MINUTES=0
+  local RETENTION_DESC=""
+  case "$RETENTION_CHOICE" in
+    1) RETENTION_MINUTES=1; RETENTION_DESC="1 minute (TESTING)" ;;
+    2) RETENTION_MINUTES=60; RETENTION_DESC="1 hour (TESTING)" ;;
+    3) RETENTION_MINUTES=$((7 * 24 * 60)); RETENTION_DESC="7 days" ;;
+    4) RETENTION_MINUTES=$((14 * 24 * 60)); RETENTION_DESC="14 days" ;;
+    5) RETENTION_MINUTES=$((30 * 24 * 60)); RETENTION_DESC="30 days" ;;
+    6) RETENTION_MINUTES=$((60 * 24 * 60)); RETENTION_DESC="60 days" ;;
+    7) RETENTION_MINUTES=$((90 * 24 * 60)); RETENTION_DESC="90 days" ;;
+    8) RETENTION_MINUTES=$((365 * 24 * 60)); RETENTION_DESC="365 days" ;;
+    9) RETENTION_MINUTES=0; RETENTION_DESC="No automatic cleanup" ;;
+    *)
+      print_error "Invalid option"
+      press_enter_to_continue
+      return
+      ;;
+  esac
+  
+  save_config "RETENTION_MINUTES" "$RETENTION_MINUTES"
+  save_config "RETENTION_DESC" "$RETENTION_DESC"
+  
+  # Regenerate backup scripts with new retention
+  local secrets_dir rclone_remote rclone_db_path rclone_files_path
+  secrets_dir="$(get_secrets_dir)"
+  rclone_remote="$(get_config_value 'RCLONE_REMOTE')"
+  rclone_db_path="$(get_config_value 'RCLONE_DB_PATH')"
+  rclone_files_path="$(get_config_value 'RCLONE_FILES_PATH')"
+  
+  echo
+  echo "Regenerating backup scripts with new retention policy..."
+  
+  if [[ -f "$SCRIPTS_DIR/db_backup.sh" ]] && [[ -n "$rclone_db_path" ]]; then
+    generate_db_backup_script "$secrets_dir" "$rclone_remote" "$rclone_db_path" "$INSTALL_DIR/logs" "$RETENTION_MINUTES"
+    print_success "Database backup script updated"
+  fi
+  
+  if [[ -f "$SCRIPTS_DIR/files_backup.sh" ]] && [[ -n "$rclone_files_path" ]]; then
+    generate_files_backup_script "$secrets_dir" "$rclone_remote" "$rclone_files_path" "$INSTALL_DIR/logs" "$RETENTION_MINUTES"
+    print_success "Files backup script updated"
+  fi
+  
+  echo
+  print_success "Retention policy updated to: $RETENTION_DESC"
+  press_enter_to_continue
 }
 
 set_systemd_schedule() {
@@ -1184,17 +1388,55 @@ run_setup() {
   fi
   echo
   
-  # ---------- Step 6: Generate Scripts ----------
-  echo "Step 6: Generating Backup Scripts"
+  # ---------- Step 6: Retention Policy ----------
+  echo "Step 6: Retention Policy"
+  echo "------------------------"
+  echo "How long should backups be kept before automatic cleanup?"
+  echo
+  echo "  1) 1 minute (TESTING ONLY)"
+  echo "  2) 1 hour (TESTING)"
+  echo "  3) 7 days"
+  echo "  4) 14 days"
+  echo "  5) 30 days"
+  echo "  6) 60 days"
+  echo "  7) 90 days"
+  echo "  8) 365 days (1 year)"
+  echo "  9) No automatic cleanup"
+  echo
+  read -p "Select retention period [1-9] (default: 5): " RETENTION_CHOICE
+  RETENTION_CHOICE=${RETENTION_CHOICE:-5}
+  
+  local RETENTION_MINUTES=0
+  local RETENTION_DESC=""
+  case "$RETENTION_CHOICE" in
+    1) RETENTION_MINUTES=1; RETENTION_DESC="1 minute (TESTING)" ;;
+    2) RETENTION_MINUTES=60; RETENTION_DESC="1 hour (TESTING)" ;;
+    3) RETENTION_MINUTES=$((7 * 24 * 60)); RETENTION_DESC="7 days" ;;
+    4) RETENTION_MINUTES=$((14 * 24 * 60)); RETENTION_DESC="14 days" ;;
+    5) RETENTION_MINUTES=$((30 * 24 * 60)); RETENTION_DESC="30 days" ;;
+    6) RETENTION_MINUTES=$((60 * 24 * 60)); RETENTION_DESC="60 days" ;;
+    7) RETENTION_MINUTES=$((90 * 24 * 60)); RETENTION_DESC="90 days" ;;
+    8) RETENTION_MINUTES=$((365 * 24 * 60)); RETENTION_DESC="365 days" ;;
+    9) RETENTION_MINUTES=0; RETENTION_DESC="No automatic cleanup" ;;
+    *) RETENTION_MINUTES=$((30 * 24 * 60)); RETENTION_DESC="30 days (default)" ;;
+  esac
+  
+  save_config "RETENTION_MINUTES" "$RETENTION_MINUTES"
+  save_config "RETENTION_DESC" "$RETENTION_DESC"
+  print_success "Retention policy: $RETENTION_DESC"
+  echo
+  
+  # ---------- Step 7: Generate Scripts ----------
+  echo "Step 7: Generating Backup Scripts"
   echo "----------------------------------"
   
   generate_all_scripts "$SECRETS_DIR" "$DO_DATABASE" "$DO_FILES" "$RCLONE_REMOTE" \
-    "${RCLONE_DB_PATH:-}" "${RCLONE_FILES_PATH:-}"
+    "${RCLONE_DB_PATH:-}" "${RCLONE_FILES_PATH:-}" "$RETENTION_MINUTES"
   
   echo
   
-  # ---------- Step 7: Schedule Backups ----------
-  echo "Step 7: Schedule Backups (systemd timers)"
+  # ---------- Step 8: Schedule Backups ----------
+  echo "Step 8: Schedule Backups (systemd timers)"
   echo "------------------------------------------"
   
   if [[ "$DO_DATABASE" == "true" ]]; then
@@ -1244,13 +1486,14 @@ generate_all_scripts() {
   local RCLONE_REMOTE="$4"
   local RCLONE_DB_PATH="$5"
   local RCLONE_FILES_PATH="$6"
+  local RETENTION_MINUTES="${7:-0}"
   
   local LOGS_DIR="$INSTALL_DIR/logs"
   mkdir -p "$LOGS_DIR"
   
   # Generate database backup script
   if [[ "$DO_DATABASE" == "true" ]]; then
-    generate_db_backup_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_DB_PATH" "$LOGS_DIR"
+    generate_db_backup_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_DB_PATH" "$LOGS_DIR" "$RETENTION_MINUTES"
     generate_db_restore_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_DB_PATH"
     print_success "Database backup script generated"
     print_success "Database restore script generated"
@@ -1258,7 +1501,7 @@ generate_all_scripts() {
   
   # Generate files backup script
   if [[ "$DO_FILES" == "true" ]]; then
-    generate_files_backup_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_FILES_PATH" "$LOGS_DIR"
+    generate_files_backup_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_FILES_PATH" "$LOGS_DIR" "$RETENTION_MINUTES"
     generate_files_restore_script "$RCLONE_REMOTE" "$RCLONE_FILES_PATH"
     print_success "Files backup script generated"
     print_success "Files restore script generated"
@@ -1272,6 +1515,7 @@ generate_db_backup_script() {
   local RCLONE_REMOTE="$2"
   local RCLONE_PATH="$3"
   local LOGS_DIR="$4"
+  local RETENTION_MINUTES="${5:-0}"
   
   cat > "$SCRIPTS_DIR/db_backup.sh" << 'DBBACKUPEOF'
 #!/usr/bin/env bash
@@ -1285,6 +1529,7 @@ RCLONE_REMOTE="%%RCLONE_REMOTE%%"
 RCLONE_PATH="%%RCLONE_PATH%%"
 SECRETS_DIR="%%SECRETS_DIR%%"
 HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
+RETENTION_MINUTES="%%RETENTION_MINUTES%%"
 
 # Lock file in fixed location
 LOCK_FILE="/var/lock/backup-management-db.lock"
@@ -1486,6 +1731,34 @@ fi
 
 echo "Uploaded to $RCLONE_REMOTE:$RCLONE_PATH"
 
+# Retention cleanup
+if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
+  echo "Running retention cleanup (keeping backups newer than $RETENTION_MINUTES minutes)..."
+  cleanup_count=0
+  cutoff_time=$(date -d "-$RETENTION_MINUTES minutes" +%s 2>/dev/null || date -v-${RETENTION_MINUTES}M +%s 2>/dev/null || echo 0)
+  
+  if [[ "$cutoff_time" -gt 0 ]]; then
+    # List remote files and check their age
+    while IFS= read -r remote_file; do
+      [[ -z "$remote_file" ]] && continue
+      # Get file modification time from rclone
+      file_time=$(rclone lsl "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" ]]; then
+        file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
+        if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
+          echo "  Deleting old backup: $remote_file"
+          if rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null; then
+            ((cleanup_count++)) || true
+          fi
+        fi
+      fi
+    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*-db_backups-*.tar.gz.gpg" 2>/dev/null)
+    echo "Retention cleanup complete. Removed $cleanup_count old backup(s)."
+  else
+    echo "  [WARNING] Could not calculate cutoff time, skipping cleanup"
+  fi
+fi
+
 if ((${#failures[@]})); then
   [[ -n "$NTFY_URL" ]] && send_notification "DB Backup Completed with Errors on $HOSTNAME" "Backed up: $db_count, Failed: ${failures[*]}"
   echo "==== $(date +%F' '%T) END (with errors) ===="
@@ -1501,6 +1774,7 @@ DBBACKUPEOF
     -e "s|%%RCLONE_REMOTE%%|$RCLONE_REMOTE|g" \
     -e "s|%%RCLONE_PATH%%|$RCLONE_PATH|g" \
     -e "s|%%SECRETS_DIR%%|$SECRETS_DIR|g" \
+    -e "s|%%RETENTION_MINUTES%%|$RETENTION_MINUTES|g" \
     "$SCRIPTS_DIR/db_backup.sh"
   
   chmod +x "$SCRIPTS_DIR/db_backup.sh"
@@ -1689,6 +1963,7 @@ generate_files_backup_script() {
   local RCLONE_REMOTE="$2"
   local RCLONE_PATH="$3"
   local LOGS_DIR="$4"
+  local RETENTION_MINUTES="${5:-0}"
   
   cat > "$SCRIPTS_DIR/files_backup.sh" << 'FILESBACKUPEOF'
 #!/usr/bin/env bash
@@ -1703,6 +1978,7 @@ SECRETS_DIR="%%SECRETS_DIR%%"
 HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
 LOG_PREFIX="[FILES-BACKUP]"
 WWW_DIR="/var/www"
+RETENTION_MINUTES="%%RETENTION_MINUTES%%"
 
 # Lock file in fixed location
 LOCK_FILE="/var/lock/backup-management-files.lock"
@@ -1880,6 +2156,34 @@ if [[ $site_count -eq 0 ]]; then
   exit 0
 fi
 
+# Retention cleanup
+if [[ "$RETENTION_MINUTES" -gt 0 ]]; then
+  echo "$LOG_PREFIX Running retention cleanup (keeping backups newer than $RETENTION_MINUTES minutes)..."
+  cleanup_count=0
+  cutoff_time=$(date -d "-$RETENTION_MINUTES minutes" +%s 2>/dev/null || date -v-${RETENTION_MINUTES}M +%s 2>/dev/null || echo 0)
+  
+  if [[ "$cutoff_time" -gt 0 ]]; then
+    # List remote files and check their age
+    while IFS= read -r remote_file; do
+      [[ -z "$remote_file" ]] && continue
+      # Get file modification time from rclone
+      file_time=$(rclone lsl "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null | awk '{print $2" "$3}' | head -1)
+      if [[ -n "$file_time" ]]; then
+        file_epoch=$(date -d "$file_time" +%s 2>/dev/null || echo 0)
+        if [[ "$file_epoch" -gt 0 && "$file_epoch" -lt "$cutoff_time" ]]; then
+          echo "$LOG_PREFIX   Deleting old backup: $remote_file"
+          if rclone delete "$RCLONE_REMOTE:$RCLONE_PATH/$remote_file" 2>/dev/null; then
+            ((cleanup_count++)) || true
+          fi
+        fi
+      fi
+    done < <(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" 2>/dev/null)
+    echo "$LOG_PREFIX Retention cleanup complete. Removed $cleanup_count old backup(s)."
+  else
+    echo "$LOG_PREFIX [WARNING] Could not calculate cutoff time, skipping cleanup"
+  fi
+fi
+
 if [[ ${#failures[@]} -gt 0 ]]; then
   [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Errors on $HOSTNAME" "Success: $success_count, Failed: ${failures[*]}"
   echo "==== $(date +%F' '%T) END (with errors) ===="
@@ -1895,6 +2199,7 @@ FILESBACKUPEOF
     -e "s|%%RCLONE_REMOTE%%|$RCLONE_REMOTE|g" \
     -e "s|%%RCLONE_PATH%%|$RCLONE_PATH|g" \
     -e "s|%%SECRETS_DIR%%|$SECRETS_DIR|g" \
+    -e "s|%%RETENTION_MINUTES%%|$RETENTION_MINUTES|g" \
     "$SCRIPTS_DIR/files_backup.sh"
   
   chmod +x "$SCRIPTS_DIR/files_backup.sh"

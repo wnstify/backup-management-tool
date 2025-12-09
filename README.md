@@ -18,8 +18,9 @@ This tool provides a complete backup solution for WordPress hosting environments
 2. **File Backups** — Archives WordPress sites from `/var/www/`, compresses, uploads to cloud storage
 3. **Secure Credential Storage** — All credentials (database, cloud storage) are encrypted with AES-256 and bound to your server's machine-id
 4. **Automated Scheduling** — Uses systemd timers for reliable, automatic backups with retry on failure
-5. **Easy Restore** — Interactive wizard to browse and restore from any backup point
-6. **Notifications** — Optional push notifications via ntfy.sh for backup status alerts
+5. **Retention & Cleanup** — Automatic deletion of old backups based on configurable retention policy
+6. **Easy Restore** — Interactive wizard to browse and restore from any backup point
+7. **Notifications** — Optional push notifications via ntfy.sh for backup status alerts
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -59,9 +60,10 @@ This tool provides exactly that.
 - 🔐 **Machine-Bound Encryption** — Credentials encrypted with AES-256, tied to your server
 - ☁️ **Cloud Storage** — Supports 40+ providers via rclone (S3, B2, Wasabi, Google Drive, etc.)
 - ⏰ **Automated Scheduling** — Systemd timers with automatic retry and catch-up
+- 🧹 **Retention & Cleanup** — Configurable retention policy with automatic old backup deletion
 - 🔔 **Notifications** — Optional alerts via ntfy.sh on backup completion/failure
 - 🔄 **Easy Restore** — Interactive restore wizard with safety backups
-- 📋 **Detailed Logging** — Full logs with timestamps for troubleshooting
+- 📋 **Detailed Logging** — Full logs with timestamps and automatic log rotation
 
 ---
 
@@ -99,18 +101,23 @@ That's it! The wizard will guide you through configuration.
 ```
 /etc/backup-management/
 ├── backup-management.sh      # Main script
-├── .config                   # Configuration file
+├── .config                   # Configuration (retention, paths, etc.)
 ├── scripts/
 │   ├── db_backup.sh          # Database backup script
-│   └── files_backup.sh       # Files backup script
+│   ├── db_restore.sh         # Database restore script
+│   ├── files_backup.sh       # Files backup script
+│   └── files_restore.sh      # Files restore script
 └── logs/
-    ├── db_logfile.log        # Database backup logs
-    └── files_logfile.log     # Files backup logs
+    ├── db_logfile.log        # Database backup logs (auto-rotated)
+    └── files_logfile.log     # Files backup logs (auto-rotated)
 
 /etc/.{random}/               # Encrypted secrets (hidden, immutable)
-├── .db_credentials.enc       # Database credentials
-├── .encryption_key.enc       # Backup encryption key
-└── .rclone.conf.enc          # Cloud storage config
+├── .s                        # Salt for key derivation
+├── .c1                       # Encryption passphrase
+├── .c2                       # Database username
+├── .c3                       # Database password
+├── .c4                       # ntfy token (optional)
+└── .c5                       # ntfy URL (optional)
 
 /usr/local/bin/backup-management  # Symlink for easy access
 
@@ -137,14 +144,17 @@ sudo backup-management
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
- 1) Run Database Backup
- 2) Run Files Backup
- 3) Restore from Backup
- 4) Manage Schedules
- 5) View Logs
- 6) Show Status
- 7) Settings
- 8) Exit
+Main Menu
+=========
+
+  1. Run backup now
+  2. Restore from backup
+  3. View status
+  4. View logs
+  5. Manage schedules
+  6. Reconfigure
+  7. Uninstall
+  8. Exit
 ```
 
 ### Manual Backup Triggers
@@ -274,6 +284,51 @@ Schedules are managed via systemd timers. Available presets:
 **Recommended:**
 - Database backups: Every 2 hours
 - File backups: Daily at 3 AM
+
+---
+
+## Retention Policy
+
+Automatic cleanup of old backups based on configurable retention periods:
+
+| Option | Retention Period |
+|--------|------------------|
+| 1 minute | Testing only |
+| 1 hour | Testing only |
+| 7 days | Short-term |
+| 14 days | Default recommended |
+| 30 days | Standard |
+| 60 days | Extended |
+| 90 days | Long-term |
+| 365 days | Annual |
+| Disabled | No automatic cleanup |
+
+### How Retention Works
+
+1. **After each backup** — Old backups are automatically checked and deleted
+2. **Based on file age** — Uses the backup file's modification time
+3. **Safe cleanup** — Only deletes files matching backup patterns (e.g., `*-db_backups-*.tar.gz.gpg`)
+
+### Managing Retention
+
+```bash
+sudo backup-management  # Select "Manage schedules" → "Change retention policy"
+```
+
+Or run manual cleanup:
+
+```bash
+sudo backup-management  # Select "Run backup now" → "Run cleanup now"
+```
+
+### Retention in Status
+
+The status page shows your current retention policy:
+
+```
+Retention Policy:
+  ✓ Retention: 30 days
+```
 
 ---
 
