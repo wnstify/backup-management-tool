@@ -20,6 +20,20 @@ INSTALL_DIR="/etc/backup-management"
 SCRIPT_NAME="backup-management.sh"
 BIN_LINK="/usr/local/bin/backup-management"
 
+# Library modules to download
+LIB_MODULES=(
+    "core.sh"
+    "crypto.sh"
+    "config.sh"
+    "generators.sh"
+    "status.sh"
+    "backup.sh"
+    "verify.sh"
+    "restore.sh"
+    "schedule.sh"
+    "setup.sh"
+)
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -47,9 +61,9 @@ print_disclaimer() {
     echo "This tool is provided AS-IS without warranty. By installing,"
     echo "you acknowledge that:"
     echo ""
-    echo "  • You are responsible for your own backups and data"
-    echo "  • You should test restores before relying on backups"
-    echo "  • The authors are not liable for any data loss"
+    echo "  - You are responsible for your own backups and data"
+    echo "  - You should test restores before relying on backups"
+    echo "  - The authors are not liable for any data loss"
     echo ""
     echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
     echo ""
@@ -65,13 +79,13 @@ check_root() {
 
 check_system() {
     echo -e "${BLUE}[1/5] Checking system requirements...${NC}"
-    
+
     # Check OS
     if [[ -f /etc/os-release ]]; then
         source /etc/os-release
         echo -e "  OS: ${GREEN}$PRETTY_NAME${NC}"
     fi
-    
+
     # Check required commands
     local required_cmds=("bash" "openssl" "gpg" "tar" "systemctl")
     for cmd in "${required_cmds[@]}"; do
@@ -81,14 +95,14 @@ check_system() {
         fi
     done
     echo -e "  Required tools: ${GREEN}OK${NC}"
-    
+
     # Check for curl or wget
     if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null; then
         echo -e "${RED}Error: Either curl or wget is required${NC}"
         exit 1
     fi
     echo -e "  Download tool: ${GREEN}OK${NC}"
-    
+
     # Check systemd
     if ! pidof systemd &> /dev/null; then
         echo -e "${YELLOW}Warning: systemd not detected. Timers may not work.${NC}"
@@ -99,10 +113,10 @@ check_system() {
 
 install_dependencies() {
     echo -e "${BLUE}[2/5] Installing dependencies...${NC}"
-    
+
     # Update package list (suppress output)
     apt-get update -qq 2>/dev/null || true
-    
+
     # Install pigz if not present
     if ! command -v pigz &> /dev/null; then
         echo -e "  Installing pigz..."
@@ -111,7 +125,7 @@ install_dependencies() {
     if command -v pigz &> /dev/null; then
         echo -e "  pigz: ${GREEN}OK${NC}"
     fi
-    
+
     # Install rclone if not present
     if ! command -v rclone &> /dev/null; then
         echo -e "  Installing rclone..."
@@ -126,58 +140,89 @@ install_dependencies() {
     fi
 }
 
-download_script() {
-    echo -e "${BLUE}[3/5] Downloading backup-management.sh...${NC}"
-    
-    # Create installation directory
+download_file() {
+    local url="$1"
+    local target="$2"
+
+    if command -v curl &> /dev/null; then
+        if ! curl -fsSL "$url" -o "$target"; then
+            return 1
+        fi
+    elif command -v wget &> /dev/null; then
+        if ! wget -q "$url" -O "$target"; then
+            return 1
+        fi
+    fi
+
+    # Verify download
+    if [[ ! -s "$target" ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+download_scripts() {
+    echo -e "${BLUE}[3/5] Downloading backup-management tool...${NC}"
+
+    # Create installation directories
     mkdir -p "$INSTALL_DIR"
     mkdir -p "${INSTALL_DIR}/scripts"
     mkdir -p "${INSTALL_DIR}/logs"
-    
+    mkdir -p "${INSTALL_DIR}/lib"
+
     # Download main script
     local script_url="${GITHUB_RAW}/${SCRIPT_NAME}"
     local target_path="${INSTALL_DIR}/${SCRIPT_NAME}"
-    
-    echo -e "  Downloading from: ${script_url}"
-    
-    if command -v curl &> /dev/null; then
-        if ! curl -fsSL "$script_url" -o "$target_path"; then
-            echo -e "${RED}Error: Failed to download script with curl${NC}"
-            exit 1
-        fi
-    elif command -v wget &> /dev/null; then
-        if ! wget -q "$script_url" -O "$target_path"; then
-            echo -e "${RED}Error: Failed to download script with wget${NC}"
-            exit 1
-        fi
-    fi
-    
-    # Verify download
-    if [[ ! -s "$target_path" ]]; then
-        echo -e "${RED}Error: Downloaded file is empty${NC}"
+
+    echo -e "  Downloading main script..."
+    if ! download_file "$script_url" "$target_path"; then
+        echo -e "${RED}Error: Failed to download main script${NC}"
         exit 1
     fi
-    
+
     # Check if it looks like a bash script
     if ! head -1 "$target_path" | grep -q "^#!"; then
         echo -e "${RED}Error: Downloaded file does not appear to be a valid script${NC}"
         echo -e "${RED}First line: $(head -1 "$target_path")${NC}"
         exit 1
     fi
-    
-    # Make executable
+
     chmod +x "$target_path"
-    
+    echo -e "  Main script: ${GREEN}OK${NC}"
+
+    # Download library modules
+    echo -e "  Downloading library modules..."
+    local failed_modules=()
+
+    for module in "${LIB_MODULES[@]}"; do
+        local module_url="${GITHUB_RAW}/lib/${module}"
+        local module_path="${INSTALL_DIR}/lib/${module}"
+
+        if ! download_file "$module_url" "$module_path"; then
+            failed_modules+=("$module")
+            echo -e "    ${RED}Failed: ${module}${NC}"
+        else
+            chmod +x "$module_path"
+            echo -e "    ${GREEN}OK: ${module}${NC}"
+        fi
+    done
+
+    if [[ ${#failed_modules[@]} -gt 0 ]]; then
+        echo -e "${RED}Error: Failed to download ${#failed_modules[@]} module(s): ${failed_modules[*]}${NC}"
+        exit 1
+    fi
+
     # Create symlink
     ln -sf "$target_path" "$BIN_LINK"
-    
+
     echo -e "  Script: ${GREEN}${target_path}${NC}"
     echo -e "  Command: ${GREEN}backup-management${NC}"
 }
 
 create_systemd_units() {
     echo -e "${BLUE}[4/5] Creating systemd service units...${NC}"
-    
+
     # Database backup service
     cat > /etc/systemd/system/backup-management-db.service << 'EOF'
 [Unit]
@@ -248,7 +293,7 @@ EOF
 
     # Reload systemd
     systemctl daemon-reload
-    
+
     echo -e "  Services: ${GREEN}Created${NC}"
     echo -e "  Timers: ${GREEN}Created (not enabled yet)${NC}"
 }
@@ -277,28 +322,32 @@ print_success() {
 
 uninstall() {
     echo -e "${YELLOW}Uninstalling Backup Management Tool...${NC}"
-    
+
     # Stop and disable timers
     systemctl stop backup-management-db.timer 2>/dev/null || true
     systemctl stop backup-management-files.timer 2>/dev/null || true
+    systemctl stop backup-management-verify.timer 2>/dev/null || true
     systemctl disable backup-management-db.timer 2>/dev/null || true
     systemctl disable backup-management-files.timer 2>/dev/null || true
-    
+    systemctl disable backup-management-verify.timer 2>/dev/null || true
+
     # Remove systemd units
     rm -f /etc/systemd/system/backup-management-db.service
     rm -f /etc/systemd/system/backup-management-db.timer
     rm -f /etc/systemd/system/backup-management-files.service
     rm -f /etc/systemd/system/backup-management-files.timer
+    rm -f /etc/systemd/system/backup-management-verify.service
+    rm -f /etc/systemd/system/backup-management-verify.timer
     systemctl daemon-reload
-    
+
     # Remove symlink
     rm -f "$BIN_LINK"
-    
+
     # Ask about config/secrets
     echo ""
     echo "Remove configuration and encrypted secrets? (y/N): "
     read -r remove_config < /dev/tty 2>/dev/null || remove_config="N"
-    
+
     if [[ "$remove_config" =~ ^[Yy]$ ]]; then
         # Try to find and remove secrets directory
         if [[ -f "${INSTALL_DIR}/.secrets_location" ]]; then
@@ -329,9 +378,10 @@ uninstall() {
         echo -e "${GREEN}Configuration and secrets removed.${NC}"
     else
         rm -f "${INSTALL_DIR}/${SCRIPT_NAME}"
-        echo -e "${GREEN}Script removed. Configuration preserved at ${INSTALL_DIR}${NC}"
+        rm -rf "${INSTALL_DIR}/lib"
+        echo -e "${GREEN}Scripts removed. Configuration preserved at ${INSTALL_DIR}${NC}"
     fi
-    
+
     echo -e "${GREEN}Uninstallation complete.${NC}"
     exit 0
 }
@@ -343,13 +393,13 @@ main() {
         check_root
         uninstall
     fi
-    
+
     print_banner
     print_disclaimer
     check_root
     check_system
     install_dependencies
-    download_script
+    download_scripts
     create_systemd_units
     print_success
 }

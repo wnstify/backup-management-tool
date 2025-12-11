@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2024-12-11
+
+### Added
+
+- **Modular Architecture**
+  - Refactored monolithic 3,200-line script into 10 separate modules
+  - New `lib/` directory contains all functional modules
+  - Each module handles a specific responsibility (core, crypto, config, etc.)
+  - Easier to maintain, test, and extend
+
+### Changed
+
+- **Code Organization**
+  - `core.sh` - Colors, print functions, input validation, helper utilities
+  - `crypto.sh` - Encryption, secrets, key derivation functions
+  - `config.sh` - Configuration file read/write operations
+  - `generators.sh` - Script generation for backup/restore/verify
+  - `status.sh` - Status display and log viewing
+  - `backup.sh` - Backup execution and cleanup functions
+  - `verify.sh` - Backup integrity verification
+  - `restore.sh` - Restore execution functions
+  - `schedule.sh` - Schedule management and systemd timer setup
+  - `setup.sh` - Interactive setup wizard
+
+- **Main Script**
+  - `backup-management.sh` reduced from 3,200 to ~210 lines
+  - Sources all modules from `lib/` directory
+  - Handles symlink resolution for correct lib path
+  - Cleaner entry point with only main menu and install/uninstall logic
+
+- **Installer**
+  - Now downloads all library modules individually
+  - Creates `lib/` directory in installation path
+  - Shows download progress for each module
+  - Fails gracefully if any module download fails
+
+### Technical
+
+- Modules are sourced in dependency order
+- Symlink resolution ensures lib path works when called via `/usr/local/bin/backup-management`
+- All module functions remain globally accessible after sourcing
+- No functional changes to backup/restore/verify operations
+
+---
+
 ## [1.2.0] - 2024-12-09
 
 ### Added
@@ -182,6 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.3.0 | 2024-12-11 | Modular architecture, code refactoring |
 | 1.2.0 | 2024-12-09 | Checksums, backup integrity verification |
 | 1.1.1 | 2024-12-09 | Retention cleanup notifications |
 | 1.1.0 | 2024-12-09 | Retention policy, security hardening, log rotation |
