@@ -61,6 +61,8 @@ desktop.ini
 .project
 .settings/
 *.code-workspace
+.claude
+.claude/*
 
 # ----- Testing -----
 test/
