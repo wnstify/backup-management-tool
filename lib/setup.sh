@@ -71,6 +71,137 @@ run_setup() {
   [[ "$DO_FILES" == "true" ]] && print_success "Files backup: ENABLED"
   echo
 
+  # ---------- Step 1b: Web Application Paths (if files backup enabled) ----------
+  local WEB_PATH_PATTERN=""
+  local WEBROOT_SUBDIR=""
+  local PANEL_KEY=""
+
+  if [[ "$DO_FILES" == "true" ]]; then
+    echo "Step 1b: Web Application Paths"
+    echo "------------------------------"
+    echo "Where are your web applications stored?"
+    echo
+
+    # Auto-detect panel
+    local detected_panel
+    detected_panel="$(detect_panel)"
+    local detected_name
+    detected_name="$(get_panel_info "$detected_panel" "name")"
+    local detected_pattern
+    detected_pattern="$(get_panel_info "$detected_panel" "pattern")"
+    local site_count
+    site_count="$(count_sites_for_pattern "$detected_pattern")"
+
+    echo -e "${GREEN}Detected: $detected_name ($detected_pattern)${NC}"
+    [[ "$site_count" -gt 0 ]] && echo -e "${GREEN}Found $site_count site(s) matching this pattern${NC}"
+    echo
+
+    echo "  1) Use detected: $detected_name"
+    echo "     Pattern: $detected_pattern"
+    echo
+    echo "  -- Or select a different panel --"
+    echo "  2) Enhance      /var/www/*/public_html"
+    echo "  3) xCloud       /var/www/*/public_html"
+    echo "  4) RunCloud     /home/*/webapps/*"
+    echo "  5) cPanel       /home/*/public_html"
+    echo "  6) Plesk        /var/www/vhosts/*/httpdocs"
+    echo "  7) CloudPanel   /home/*/htdocs/*"
+    echo "  8) CyberPanel   /home/*/public_html"
+    echo "  9) aaPanel      /www/wwwroot/*"
+    echo " 10) HestiaCP     /home/*/web/*/public_html"
+    echo " 11) Virtualmin   /home/*/public_html"
+    echo " 12) Custom path"
+    echo
+    read -p "Select option [1-12] (default: 1): " PANEL_CHOICE
+    PANEL_CHOICE=${PANEL_CHOICE:-1}
+
+    case "$PANEL_CHOICE" in
+      1)
+        PANEL_KEY="$detected_panel"
+        ;;
+      2) PANEL_KEY="enhance" ;;
+      3) PANEL_KEY="xcloud" ;;
+      4) PANEL_KEY="runcloud" ;;
+      5) PANEL_KEY="cpanel" ;;
+      6) PANEL_KEY="plesk" ;;
+      7) PANEL_KEY="cloudpanel" ;;
+      8) PANEL_KEY="cyberpanel" ;;
+      9) PANEL_KEY="aapanel" ;;
+      10) PANEL_KEY="hestia" ;;
+      11) PANEL_KEY="virtualmin" ;;
+      12)
+        PANEL_KEY="custom"
+        echo
+        echo "Enter custom path pattern. Use * as wildcard for user/site directories."
+        echo "Examples:"
+        echo "  /var/www/*           - All directories in /var/www"
+        echo "  /home/*/sites/*      - All sites under each user's sites folder"
+        echo "  /opt/apps/*          - All apps in /opt/apps"
+        echo
+        read -p "Enter path pattern: " CUSTOM_PATTERN
+        if [[ -z "$CUSTOM_PATTERN" ]]; then
+          print_error "Path pattern cannot be empty"
+          press_enter_to_continue
+          return
+        fi
+        # Validate the pattern exists
+        if ! pattern_exists "$CUSTOM_PATTERN"; then
+          print_warning "Warning: No directories match '$CUSTOM_PATTERN'"
+          read -p "Continue anyway? (y/N): " CONTINUE_ANYWAY
+          if [[ ! "$CONTINUE_ANYWAY" =~ ^[Yy]$ ]]; then
+            return
+          fi
+        fi
+        WEB_PATH_PATTERN="$CUSTOM_PATTERN"
+        WEBROOT_SUBDIR="."
+
+        echo
+        echo "Does each site have a subdirectory for web files?"
+        echo "  1) No - files are directly in the site folder"
+        echo "  2) public_html"
+        echo "  3) httpdocs"
+        echo "  4) public"
+        echo "  5) www"
+        echo "  6) Other (specify)"
+        read -p "Select [1-6] (default: 1): " SUBDIR_CHOICE
+        SUBDIR_CHOICE=${SUBDIR_CHOICE:-1}
+
+        case "$SUBDIR_CHOICE" in
+          1) WEBROOT_SUBDIR="." ;;
+          2) WEBROOT_SUBDIR="public_html" ;;
+          3) WEBROOT_SUBDIR="httpdocs" ;;
+          4) WEBROOT_SUBDIR="public" ;;
+          5) WEBROOT_SUBDIR="www" ;;
+          6)
+            read -p "Enter subdirectory name: " WEBROOT_SUBDIR
+            WEBROOT_SUBDIR="${WEBROOT_SUBDIR:-.}"
+            ;;
+        esac
+        ;;
+      *)
+        PANEL_KEY="$detected_panel"
+        ;;
+    esac
+
+    # Get pattern and subdir from panel definition if not custom
+    if [[ "$PANEL_CHOICE" != "12" ]]; then
+      WEB_PATH_PATTERN="$(get_panel_info "$PANEL_KEY" "pattern")"
+      WEBROOT_SUBDIR="$(get_panel_info "$PANEL_KEY" "webroot_subdir")"
+    fi
+
+    # Save configuration
+    save_config "PANEL_KEY" "$PANEL_KEY"
+    save_config "WEB_PATH_PATTERN" "$WEB_PATH_PATTERN"
+    save_config "WEBROOT_SUBDIR" "$WEBROOT_SUBDIR"
+
+    local final_panel_name
+    final_panel_name="$(get_panel_info "$PANEL_KEY" "name")"
+    print_success "Panel: $final_panel_name"
+    print_success "Path pattern: $WEB_PATH_PATTERN"
+    [[ "$WEBROOT_SUBDIR" != "." ]] && print_success "Webroot subdir: $WEBROOT_SUBDIR"
+    echo
+  fi
+
   # ---------- Step 2: Encryption Password ----------
   echo "Step 2: Encryption Password"
   echo "---------------------------"
@@ -301,7 +432,8 @@ run_setup() {
   echo "----------------------------------"
 
   generate_all_scripts "$SECRETS_DIR" "$DO_DATABASE" "$DO_FILES" "$RCLONE_REMOTE" \
-    "${RCLONE_DB_PATH:-}" "${RCLONE_FILES_PATH:-}" "$RETENTION_MINUTES"
+    "${RCLONE_DB_PATH:-}" "${RCLONE_FILES_PATH:-}" "$RETENTION_MINUTES" \
+    "${WEB_PATH_PATTERN:-/var/www/*}" "${WEBROOT_SUBDIR:-.}"
 
   echo
 

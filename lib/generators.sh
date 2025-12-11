@@ -14,6 +14,8 @@ generate_all_scripts() {
   local RCLONE_DB_PATH="$5"
   local RCLONE_FILES_PATH="$6"
   local RETENTION_MINUTES="${7:-0}"
+  local WEB_PATH_PATTERN="${8:-/var/www/*}"
+  local WEBROOT_SUBDIR="${9:-.}"
 
   local LOGS_DIR="$INSTALL_DIR/logs"
   mkdir -p "$LOGS_DIR"
@@ -28,7 +30,7 @@ generate_all_scripts() {
 
   # Generate files backup script
   if [[ "$DO_FILES" == "true" ]]; then
-    generate_files_backup_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_FILES_PATH" "$LOGS_DIR" "$RETENTION_MINUTES"
+    generate_files_backup_script "$SECRETS_DIR" "$RCLONE_REMOTE" "$RCLONE_FILES_PATH" "$LOGS_DIR" "$RETENTION_MINUTES" "$WEB_PATH_PATTERN" "$WEBROOT_SUBDIR"
     generate_files_restore_script "$RCLONE_REMOTE" "$RCLONE_FILES_PATH"
     print_success "Files backup script generated"
     print_success "Files restore script generated"
@@ -538,6 +540,8 @@ generate_files_backup_script() {
   local RCLONE_PATH="$3"
   local LOGS_DIR="$4"
   local RETENTION_MINUTES="${5:-0}"
+  local WEB_PATH_PATTERN="${6:-/var/www/*}"
+  local WEBROOT_SUBDIR="${7:-.}"
 
   cat > "$SCRIPTS_DIR/files_backup.sh" << 'FILESBACKUPEOF'
 #!/usr/bin/env bash
@@ -551,7 +555,8 @@ RCLONE_PATH="%%RCLONE_PATH%%"
 SECRETS_DIR="%%SECRETS_DIR%%"
 HOSTNAME="$(hostname -f 2>/dev/null || hostname)"
 LOG_PREFIX="[FILES-BACKUP]"
-WWW_DIR="/var/www"
+WEB_PATH_PATTERN="%%WEB_PATH_PATTERN%%"
+WEBROOT_SUBDIR="%%WEBROOT_SUBDIR%%"
 RETENTION_MINUTES="%%RETENTION_MINUTES%%"
 
 # Lock file in fixed location
@@ -654,24 +659,59 @@ sanitize_for_filename() {
   printf "%s" "$s"
 }
 
-get_wp_site_url() {
-  local user="$1" wp_root="$2" url=""
-  if su -l -s /bin/bash "$user" -c "command -v wp >/dev/null 2>&1" 2>/dev/null; then
-    url="$(su -l -s /bin/bash "$user" -c "cd '$wp_root' && wp option get siteurl 2>/dev/null" 2>/dev/null || true)"
+# Get site name/URL from various app types
+# Priority: WordPress > Laravel > Node.js > nginx config > folder name
+get_site_name() {
+  local site_path="$1"
+  local owner="${2:-www-data}"
+  local name=""
+
+  # 1. WordPress: wp option get siteurl
+  if [[ -f "$site_path/wp-config.php" ]]; then
+    if su -l -s /bin/bash "$owner" -c "command -v wp >/dev/null 2>&1" 2>/dev/null; then
+      name="$(su -l -s /bin/bash "$owner" -c "cd '$site_path' && wp option get siteurl 2>/dev/null" 2>/dev/null || true)"
+    fi
+    if [[ -z "$name" ]]; then
+      name="$(grep -E "define\s*\(\s*['\"]WP_HOME['\"]" "$site_path/wp-config.php" 2>/dev/null | head -1 | sed -E "s/.*['\"]https?:\/\/([^'\"]+)['\"].*/https:\/\/\1/" || true)"
+    fi
+    [[ -n "$name" ]] && echo "$name" && return 0
   fi
-  if [[ -z "$url" && -f "$wp_root/wp-config.php" ]]; then
-    url="$(grep -E "define\s*\(\s*['\"]WP_HOME['\"]" "$wp_root/wp-config.php" 2>/dev/null | head -1 | sed -E "s/.*['\"]https?:\/\/([^'\"]+)['\"].*/https:\/\/\1/" || true)"
+
+  # 2. Laravel: APP_URL from .env
+  if [[ -f "$site_path/.env" ]] && [[ -f "$site_path/artisan" ]]; then
+    name="$(grep -E "^APP_URL=" "$site_path/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'" || true)"
+    [[ -n "$name" ]] && echo "$name" && return 0
   fi
-  [[ -z "$url" ]] && url="$(basename "$wp_root")"
-  echo "$url"
+
+  # 3. Node.js: name from package.json
+  if [[ -f "$site_path/package.json" ]]; then
+    name="$(grep -E '"name"\s*:' "$site_path/package.json" 2>/dev/null | head -1 | sed -E 's/.*"name"\s*:\s*"([^"]+)".*/\1/' || true)"
+    [[ -n "$name" ]] && echo "$name" && return 0
+  fi
+
+  # 4. Generic: try to extract from nginx/apache configs
+  if [[ -d "/etc/nginx/sites-enabled" ]]; then
+    local nginx_name
+    nginx_name="$(grep -rh "server_name" /etc/nginx/sites-enabled/ 2>/dev/null | grep -i "$(basename "$site_path")" | head -1 | awk '{print $2}' | tr -d ';' || true)"
+    [[ -n "$nginx_name" && "$nginx_name" != "_" ]] && echo "$nginx_name" && return 0
+  fi
+
+  # 5. Fallback: use folder name
+  echo "$(basename "$site_path")"
 }
 
-echo "$LOG_PREFIX Scanning $WWW_DIR..."
+echo "$LOG_PREFIX Scanning using pattern: $WEB_PATH_PATTERN"
+echo "$LOG_PREFIX Webroot subdirectory: $WEBROOT_SUBDIR"
 
-# Check if WWW_DIR exists
-if [[ ! -d "$WWW_DIR" ]]; then
-  echo "$LOG_PREFIX [ERROR] $WWW_DIR does not exist"
-  [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Failed on $HOSTNAME" "$WWW_DIR not found"
+# Check if we can find any sites matching the pattern
+site_dirs=()
+for dir in $WEB_PATH_PATTERN; do
+  [[ -d "$dir" ]] && site_dirs+=("$dir")
+done
+
+if [[ ${#site_dirs[@]} -eq 0 ]]; then
+  echo "$LOG_PREFIX [ERROR] No directories found matching pattern: $WEB_PATH_PATTERN"
+  [[ -n "$NTFY_URL" ]] && send_notification "Files Backup Failed on $HOSTNAME" "No sites found matching pattern"
   exit 4
 fi
 
@@ -679,54 +719,56 @@ declare -a failures=()
 success_count=0
 site_count=0
 
-for site_path in "$WWW_DIR"/*/; do
+for site_path in "${site_dirs[@]}"; do
   [[ ! -d "$site_path" ]] && continue
   site_name="$(basename "$site_path")"
-  [[ "$site_name" == "default" || "$site_name" == "html" ]] && continue
 
-  wp_root=""
-  if [[ -d "$site_path/public_html" ]]; then
-    wp_root="$site_path/public_html"
-  elif [[ -f "$site_path/wp-config.php" ]]; then
-    wp_root="$site_path"
+  # Skip common non-site directories
+  [[ "$site_name" == "default" || "$site_name" == "html" || "$site_name" == "cgi-bin" ]] && continue
+
+  # Determine the actual web root (where files are)
+  # WEBROOT_SUBDIR can be "." (direct), "public_html", "httpdocs", etc.
+  if [[ "$WEBROOT_SUBDIR" == "." ]]; then
+    webroot="$site_path"
   else
+    webroot="$site_path/$WEBROOT_SUBDIR"
+    # If webroot subdir doesn't exist, check if files are directly in site_path
+    if [[ ! -d "$webroot" ]]; then
+      # Fall back to direct path if subdir doesn't exist
+      webroot="$site_path"
+    fi
+  fi
+
+  # Skip if webroot is empty or doesn't contain any files
+  if [[ ! -d "$webroot" ]] || [[ -z "$(ls -A "$webroot" 2>/dev/null)" ]]; then
+    echo "$LOG_PREFIX [$site_name] Skipping: empty or missing webroot"
     continue
   fi
 
   ((site_count++)) || true
 
   owner="$(stat -c '%U' "$site_path" 2>/dev/null || echo "www-data")"
-  site_url="$(get_wp_site_url "$owner" "$wp_root")"
+  site_url="$(get_site_name "$webroot" "$owner")"
   base_name="$(sanitize_for_filename "$site_url")"
   archive_path="$TEMP_DIR/${base_name}-${STAMP}.tar.gz"
 
-  echo "$LOG_PREFIX [$site_name] Archiving..."
+  echo "$LOG_PREFIX [$site_name] Archiving ($site_url)..."
 
-  # Archive CONTENTS of public_html (not the directory itself)
-  # This allows restore to extract INTO existing public_html without replacing it
+  # Archive CONTENTS of webroot (not the directory itself)
+  # This allows restore to extract INTO existing webroot without replacing it
   # Critical for panels like Enhance that use overlay containers
   #
   # We also create a metadata file that stores the restore path
   metadata_file="$TEMP_DIR/${base_name}.restore-path"
 
-  if [[ -d "$site_path/public_html" ]]; then
-    # Store restore path in metadata
-    echo "$site_path/public_html" > "$metadata_file"
-    # Archive contents of public_html
-    if tar --warning=no-file-changed --ignore-failed-read -I pigz -cpf "$archive_path" -C "$site_path/public_html" . 2>/dev/null; then
-      tar_status=0
-    else
-      tar_status=$?
-    fi
+  # Store restore path in metadata
+  echo "$webroot" > "$metadata_file"
+
+  # Archive contents of webroot
+  if tar --warning=no-file-changed --ignore-failed-read -I pigz -cpf "$archive_path" -C "$webroot" . 2>/dev/null; then
+    tar_status=0
   else
-    # No public_html, store site path
-    echo "$site_path" > "$metadata_file"
-    # Archive the site directory contents directly
-    if tar --warning=no-file-changed --ignore-failed-read -I pigz -cpf "$archive_path" -C "$site_path" . 2>/dev/null; then
-      tar_status=0
-    else
-      tar_status=$?
-    fi
+    tar_status=$?
   fi
 
   # tar exit code 1 = files changed during archive (acceptable)
@@ -824,6 +866,8 @@ FILESBACKUPEOF
     -e "s|%%RCLONE_PATH%%|$RCLONE_PATH|g" \
     -e "s|%%SECRETS_DIR%%|$SECRETS_DIR|g" \
     -e "s|%%RETENTION_MINUTES%%|$RETENTION_MINUTES|g" \
+    -e "s|%%WEB_PATH_PATTERN%%|$WEB_PATH_PATTERN|g" \
+    -e "s|%%WEBROOT_SUBDIR%%|$WEBROOT_SUBDIR|g" \
     "$SCRIPTS_DIR/files_backup.sh"
 
   chmod +x "$SCRIPTS_DIR/files_backup.sh"
@@ -843,7 +887,6 @@ umask 077
 RCLONE_REMOTE="%%RCLONE_REMOTE%%"
 RCLONE_PATH="%%RCLONE_PATH%%"
 LOG_PREFIX="[FILES-RESTORE]"
-WWW_DIR="/var/www"
 
 # Use same lock as backup to prevent conflicts
 LOCK_FILE="/var/lock/backup-management-files.lock"
@@ -895,9 +938,6 @@ echo "Available sites:"
 for i in "${!SITE_NAMES[@]}"; do
   site="${SITE_NAMES[$i]}"
   latest="${SITE_BACKUPS[$site]}"
-  # Check if site exists locally
-  # Try to match site name to actual directory (site name is sanitized)
-  [[ -d "$WWW_DIR" ]] && exists_tag="[EXISTS]" || exists_tag="[NEW]"
   printf "  %2d) %s\n" "$((i+1))" "$site"
   printf "      Latest: %s\n" "$latest"
 done
@@ -985,38 +1025,47 @@ for site in "${SELECTED_SITES[@]}"; do
     echo "$LOG_PREFIX   Restore path from metadata: $restore_path"
   fi
 
-  # If no metadata file, try to determine restore path from archive or site name
+  # If no metadata file, try to determine restore path from archive or prompt user
   if [[ -z "$restore_path" ]]; then
     # Check archive structure - old format had directory name, new format has ./
     first_entry=$(tar -tzf "$local_file" 2>/dev/null | head -1)
     if [[ "$first_entry" == "./" || "$first_entry" == "." ]]; then
-      # New format: contents only, need to find matching site directory
+      # New format: contents only, no metadata - need user input
       echo "$LOG_PREFIX   [INFO] New backup format detected (contents only)"
-      # Try to find a matching directory in /var/www
-      for potential_dir in "$WWW_DIR"/*/; do
-        [[ ! -d "$potential_dir" ]] && continue
-        # Check if this site's sanitized name matches
-        if [[ -d "${potential_dir}public_html" ]]; then
-          restore_path="${potential_dir}public_html"
-          break
-        fi
-      done
+      echo "$LOG_PREFIX   [WARNING] No restore-path metadata found for this backup."
+      echo "$LOG_PREFIX   This backup was made with v1.4.0+ but is missing its metadata file."
+      echo ""
+      read -p "  Enter full path to restore to (e.g., /var/www/mysite/public_html): " restore_path
       if [[ -z "$restore_path" ]]; then
-        echo "$LOG_PREFIX   [ERROR] Could not determine restore path. No metadata file and no matching directory found."
-        echo "$LOG_PREFIX   [HINT] For new backups, metadata file will be created automatically."
+        echo "$LOG_PREFIX   [ERROR] No restore path provided."
         rm -f "$local_file"
         continue
       fi
+      if [[ ! -d "$restore_path" ]]; then
+        echo "$LOG_PREFIX   [WARNING] Path does not exist: $restore_path"
+        read -p "  Create this directory? (y/N): " create_dir
+        if [[ "$create_dir" =~ ^[Yy]$ ]]; then
+          mkdir -p "$restore_path" || { echo "$LOG_PREFIX   [ERROR] Could not create directory"; rm -f "$local_file"; continue; }
+        else
+          rm -f "$local_file"
+          continue
+        fi
+      fi
     else
-      # Old format: archive contains directory name
+      # Old format: archive contains directory name - also prompt for base path
       dir_name=$(echo "$first_entry" | cut -d'/' -f1)
       if [[ -z "$dir_name" ]]; then
         echo "$LOG_PREFIX   [ERROR] Could not determine directory name from archive"
         rm -f "$local_file"
         continue
       fi
-      restore_path="$WWW_DIR/$dir_name"
-      echo "$LOG_PREFIX   [INFO] Old backup format detected, restoring to: $restore_path"
+      echo "$LOG_PREFIX   [INFO] Old backup format detected (directory: $dir_name)"
+      echo "$LOG_PREFIX   [INFO] This backup contains the full directory structure."
+      echo ""
+      read -p "  Enter base path to extract to (default: /var/www): " base_path
+      base_path="${base_path:-/var/www}"
+      restore_path="$base_path/$dir_name"
+      echo "$LOG_PREFIX   Will restore to: $restore_path"
     fi
   fi
 
@@ -1070,24 +1119,26 @@ for site in "${SELECTED_SITES[@]}"; do
   else
     # OLD FORMAT: Archive contains full directory - replace entire directory
     dir_name=$(echo "$first_entry" | cut -d'/' -f1)
+    # Extract base_path from restore_path (restore_path = base_path/dir_name)
+    extract_base_path="$(dirname "$restore_path")"
 
     # Backup existing directory if it exists
     backup_name=""
-    if [[ -d "$WWW_DIR/$dir_name" ]]; then
+    if [[ -d "$restore_path" ]]; then
       backup_name="${dir_name}.pre-restore-$(date +%Y%m%d-%H%M%S)"
       echo "$LOG_PREFIX   Backing up existing to: $backup_name"
-      mv "$WWW_DIR/$dir_name" "$WWW_DIR/$backup_name"
+      mv "$restore_path" "$extract_base_path/$backup_name"
     fi
 
-    if tar -xzf "$local_file" -C "$WWW_DIR" 2>/dev/null; then
+    if tar -xzf "$local_file" -C "$extract_base_path" 2>/dev/null; then
       echo "$LOG_PREFIX   Success"
       # Remove temp backup on success
-      [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && rm -rf "$WWW_DIR/$backup_name"
+      [[ -n "$backup_name" && -d "$extract_base_path/$backup_name" ]] && rm -rf "$extract_base_path/$backup_name"
     else
       echo "$LOG_PREFIX   [ERROR] Extraction failed"
       # Restore the backup if we made one
-      if [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]]; then
-        mv "$WWW_DIR/$backup_name" "$WWW_DIR/$dir_name"
+      if [[ -n "$backup_name" && -d "$extract_base_path/$backup_name" ]]; then
+        mv "$extract_base_path/$backup_name" "$restore_path"
         echo "$LOG_PREFIX   Restored original directory"
       fi
     fi

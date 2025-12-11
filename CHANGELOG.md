@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2024-12-11
+
+### Added
+
+- **Multi-Panel Support**
+  - Auto-detects installed hosting panel (Enhance, xCloud, RunCloud, cPanel, Plesk, CloudPanel, CyberPanel, aaPanel, HestiaCP, Virtualmin)
+  - Panel presets with correct web path patterns for each panel
+  - Custom path option for non-standard setups
+  - New setup step (Step 1b) for web application paths configuration
+
+- **Multi-Application Support**
+  - No longer limited to WordPress - backs up any web application
+  - Smart site naming that detects app type:
+    - WordPress: Uses `wp option get siteurl` or `WP_HOME` from wp-config.php
+    - Laravel: Uses `APP_URL` from .env file
+    - Node.js: Uses `name` from package.json
+    - Generic: Falls back to folder name
+  - Full backup support (no excludes) for disaster recovery
+
+- **Panel Detection Functions**
+  - `detect_panel()` - Auto-detects installed panel
+  - `detect_panel_by_service()` - Checks for panel services
+  - `detect_panel_by_user()` - Checks for panel-specific users
+  - `detect_panel_by_files()` - Checks for panel-specific files
+  - `get_site_name()` - Smart site naming for different app types
+
+### Changed
+
+- **Backup Script Architecture**
+  - Uses configurable `WEB_PATH_PATTERN` instead of hardcoded `/var/www/*`
+  - Uses configurable `WEBROOT_SUBDIR` for panels with subdirectory structures
+  - Site scanning now uses glob pattern matching for flexibility
+  - Backup script logs the pattern being used for transparency
+
+- **Restore Script Improvements**
+  - Removed hardcoded path dependencies
+  - Prompts user for restore path when metadata is missing
+  - Better handling of old vs new backup formats
+  - User-configurable base path for legacy backups
+
+- **Configuration**
+  - New config values: `PANEL_KEY`, `WEB_PATH_PATTERN`, `WEBROOT_SUBDIR`
+  - Setup wizard now includes panel/path configuration step
+
+### Technical
+
+- Panel definitions stored in `PANEL_DEFINITIONS` associative array
+- Each panel has: name, path pattern, webroot subdirectory, detection method
+- Supported panels:
+  - Enhance: `/var/www/*/public_html` (webroot: `public_html`) - detected via `appcd` service
+  - xCloud: `/var/www/*/public_html` (webroot: `public_html`) - detected via `xcloud` user
+  - RunCloud: `/home/*/webapps/*` (webroot: `.`) - detected via `runcloud` user
+  - cPanel: `/home/*/public_html` (webroot: `.`)
+  - Plesk: `/var/www/vhosts/*/httpdocs` (webroot: `.`)
+  - CloudPanel: `/home/*/htdocs/*` (webroot: `.`)
+  - CyberPanel: `/home/*/public_html` (webroot: `.`)
+  - aaPanel: `/www/wwwroot/*` (webroot: `.`)
+  - HestiaCP: `/home/*/web/*/public_html` (webroot: `public_html`)
+  - Virtualmin: `/home/*/public_html` (webroot: `.`)
+  - Custom: User-defined pattern
+
+---
+
 ## [1.3.2] - 2024-12-11
 
 ### Fixed
@@ -266,6 +329,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.4.0 | 2024-12-11 | Multi-panel support, multi-app backup, smart site naming |
 | 1.3.2 | 2024-12-11 | Enhance panel / overlay container compatibility |
 | 1.3.1 | 2024-12-11 | Fixed files restore for per-site archives |
 | 1.3.0 | 2024-12-11 | Modular architecture, code refactoring |

@@ -275,3 +275,249 @@ safe_write_file() {
     return 1
   fi
 }
+
+# ---------- Panel Detection Functions ----------
+
+# Panel definitions: name|pattern|webroot_subdir|detection_method
+# webroot_subdir: subdirectory containing web files (empty = direct)
+declare -A PANEL_DEFINITIONS=(
+  ["enhance"]="Enhance|/var/www/*/public_html|public_html|service"
+  ["xcloud"]="xCloud|/var/www/*/public_html|public_html|user"
+  ["runcloud"]="RunCloud|/home/*/webapps/*|.|user"
+  ["cpanel"]="cPanel|/home/*/public_html|.|file"
+  ["plesk"]="Plesk|/var/www/vhosts/*/httpdocs|.|service"
+  ["cloudpanel"]="CloudPanel|/home/*/htdocs/*|.|service"
+  ["cyberpanel"]="CyberPanel|/home/*/public_html|.|service"
+  ["aapanel"]="aaPanel|/www/wwwroot/*|.|service"
+  ["hestia"]="HestiaCP|/home/*/web/*/public_html|public_html|service"
+  ["virtualmin"]="Virtualmin|/home/*/public_html|.|file"
+  ["custom"]="Custom|/var/www/*|.|none"
+)
+
+# Check if a service is running
+is_service_running() {
+  local service_name="$1"
+  systemctl is-active --quiet "$service_name" 2>/dev/null
+}
+
+# Check if a file/directory pattern exists
+pattern_exists() {
+  local pattern="$1"
+  compgen -G "$pattern" >/dev/null 2>&1
+}
+
+# Detect panel by checking services
+detect_panel_by_service() {
+  # Enhance panel - runs appcd.service
+  if is_service_running "appcd" || [[ -d "/var/local/enhance" ]]; then
+    echo "enhance"
+    return 0
+  fi
+
+  # Plesk
+  if is_service_running "psa" || is_service_running "plesk-web-configurator"; then
+    echo "plesk"
+    return 0
+  fi
+
+  # CloudPanel
+  if is_service_running "clp" || [[ -f "/home/clp-data/credentials" ]]; then
+    echo "cloudpanel"
+    return 0
+  fi
+
+  # CyberPanel
+  if is_service_running "lscpd" || [[ -d "/usr/local/CyberCP" ]]; then
+    echo "cyberpanel"
+    return 0
+  fi
+
+  # aaPanel (BaoTa)
+  if is_service_running "bt" || [[ -d "/www/server/panel" ]]; then
+    echo "aapanel"
+    return 0
+  fi
+
+  # HestiaCP
+  if is_service_running "hestia" || [[ -d "/usr/local/hestia" ]]; then
+    echo "hestia"
+    return 0
+  fi
+
+  return 1
+}
+
+# Check if a system user exists (in /etc/passwd)
+user_exists() {
+  local username="$1"
+  getent passwd "$username" >/dev/null 2>&1
+}
+
+# Detect panel by checking user patterns
+detect_panel_by_user() {
+  # xCloud - has xcloud user in /etc/passwd (no service to detect)
+  if user_exists "xcloud"; then
+    echo "xcloud"
+    return 0
+  fi
+
+  # RunCloud - has runcloud user in /etc/passwd
+  if user_exists "runcloud"; then
+    echo "runcloud"
+    return 0
+  fi
+
+  return 1
+}
+
+# Detect panel by checking file patterns
+detect_panel_by_files() {
+  # cPanel - WHM/cPanel specific files
+  if [[ -f "/usr/local/cpanel/cpanel" ]] || [[ -d "/usr/local/cpanel" ]]; then
+    echo "cpanel"
+    return 0
+  fi
+
+  # Virtualmin - Webmin with Virtualmin
+  if [[ -d "/etc/webmin/virtual-server" ]]; then
+    echo "virtualmin"
+    return 0
+  fi
+
+  return 1
+}
+
+# Auto-detect installed panel
+detect_panel() {
+  local detected=""
+
+  # Try service detection first (most reliable)
+  detected=$(detect_panel_by_service)
+  [[ -n "$detected" ]] && echo "$detected" && return 0
+
+  # Try user-based detection
+  detected=$(detect_panel_by_user)
+  [[ -n "$detected" ]] && echo "$detected" && return 0
+
+  # Try file-based detection
+  detected=$(detect_panel_by_files)
+  [[ -n "$detected" ]] && echo "$detected" && return 0
+
+  # Fallback: check common paths
+  if pattern_exists "/var/www/*/public_html"; then
+    echo "enhance"  # Most likely Enhance-style
+    return 0
+  fi
+
+  if pattern_exists "/home/*/webapps/*"; then
+    echo "runcloud"
+    return 0
+  fi
+
+  if pattern_exists "/home/*/public_html"; then
+    echo "cpanel"  # Generic cPanel-style
+    return 0
+  fi
+
+  # Default to custom with /var/www
+  echo "custom"
+  return 0
+}
+
+# Get panel info by key
+get_panel_info() {
+  local panel_key="$1"
+  local field="$2"  # name, pattern, webroot_subdir, detection_method
+
+  local panel_data="${PANEL_DEFINITIONS[$panel_key]:-}"
+  [[ -z "$panel_data" ]] && return 1
+
+  case "$field" in
+    name)
+      echo "$panel_data" | cut -d'|' -f1
+      ;;
+    pattern)
+      echo "$panel_data" | cut -d'|' -f2
+      ;;
+    webroot_subdir)
+      echo "$panel_data" | cut -d'|' -f3
+      ;;
+    detection_method)
+      echo "$panel_data" | cut -d'|' -f4
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Get all panel keys
+get_all_panel_keys() {
+  echo "${!PANEL_DEFINITIONS[@]}" | tr ' ' '\n' | sort
+}
+
+# Count sites for a given pattern
+count_sites_for_pattern() {
+  local pattern="$1"
+  local count=0
+
+  for dir in $pattern; do
+    [[ -d "$dir" ]] && ((count++))
+  done
+
+  echo "$count"
+}
+
+# ---------- Site Naming Functions ----------
+
+# Get site name/URL from various app types
+get_site_name() {
+  local site_path="$1"
+  local owner="${2:-www-data}"
+  local name=""
+
+  # 1. WordPress: wp option get siteurl
+  if [[ -f "$site_path/wp-config.php" ]]; then
+    if su -l -s /bin/bash "$owner" -c "command -v wp >/dev/null 2>&1" 2>/dev/null; then
+      name="$(su -l -s /bin/bash "$owner" -c "cd '$site_path' && wp option get siteurl 2>/dev/null" 2>/dev/null || true)"
+    fi
+    if [[ -z "$name" ]]; then
+      name="$(grep -E "define\s*\(\s*['\"]WP_HOME['\"]" "$site_path/wp-config.php" 2>/dev/null | head -1 | sed -E "s/.*['\"]https?:\/\/([^'\"]+)['\"].*/https:\/\/\1/" || true)"
+    fi
+    [[ -n "$name" ]] && echo "$name" && return 0
+  fi
+
+  # 2. Laravel: APP_URL from .env
+  if [[ -f "$site_path/.env" ]] && [[ -f "$site_path/artisan" ]]; then
+    name="$(grep -E "^APP_URL=" "$site_path/.env" 2>/dev/null | cut -d'=' -f2 | tr -d '"' | tr -d "'" || true)"
+    [[ -n "$name" ]] && echo "$name" && return 0
+  fi
+
+  # 3. Node.js: name from package.json
+  if [[ -f "$site_path/package.json" ]]; then
+    name="$(grep -E '"name"\s*:' "$site_path/package.json" 2>/dev/null | head -1 | sed -E 's/.*"name"\s*:\s*"([^"]+)".*/\1/' || true)"
+    [[ -n "$name" ]] && echo "$name" && return 0
+  fi
+
+  # 4. Generic: try to extract from nginx/apache configs in common locations
+  # Check for server_name in nginx configs
+  if [[ -d "/etc/nginx/sites-enabled" ]]; then
+    local nginx_name
+    nginx_name="$(grep -rh "server_name" /etc/nginx/sites-enabled/ 2>/dev/null | grep -i "$(basename "$site_path")" | head -1 | awk '{print $2}' | tr -d ';' || true)"
+    [[ -n "$nginx_name" && "$nginx_name" != "_" ]] && echo "$nginx_name" && return 0
+  fi
+
+  # 5. Fallback: use folder name
+  echo "$(basename "$site_path")"
+}
+
+# Sanitize name for use as filename
+sanitize_for_filename() {
+  local s="$1"
+  s="$(echo -n "$s" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  s="${s//:\/\//__}"; s="${s//\//__}"
+  s="$(echo -n "$s" | sed -E 's/[^a-z0-9._-]+/_/g')"
+  s="${s%.}"
+  [[ -z "$s" ]] && s="unknown-site"
+  printf "%s" "$s"
+}

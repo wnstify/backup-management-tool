@@ -1,6 +1,6 @@
 # Backup Management Tool
 
-A secure, automated backup solution for WordPress sites and MySQL/MariaDB databases with encrypted cloud storage.
+A secure, automated backup solution for web applications and MySQL/MariaDB databases with encrypted cloud storage. Supports multiple hosting panels and application types.
 
 **By [Webnestify](https://webnestify.cloud)**
 
@@ -12,10 +12,10 @@ A secure, automated backup solution for WordPress sites and MySQL/MariaDB databa
 
 ## Overview
 
-This tool provides a complete backup solution for WordPress hosting environments:
+This tool provides a complete backup solution for web hosting environments:
 
 1. **Database Backups** — Dumps all MySQL/MariaDB databases, compresses with pigz, encrypts with GPG, uploads to cloud storage
-2. **File Backups** — Archives WordPress sites from `/var/www/`, compresses, uploads to cloud storage
+2. **File Backups** — Archives web applications (WordPress, Laravel, Node.js, PHP, etc.) with auto-detected panel paths
 3. **Secure Credential Storage** — All credentials (database, cloud storage) are encrypted with AES-256 and bound to your server's machine-id
 4. **Automated Scheduling** — Uses systemd timers for reliable, automatic backups with retry on failure
 5. **Retention & Cleanup** — Automatic deletion of old backups based on configurable retention policy
@@ -31,8 +31,8 @@ This tool provides a complete backup solution for WordPress hosting environments
 │  └──────────┘    └──────────┘    └──────────┘    └──────────┘  │
 │                                                                 │
 │  ┌──────────┐    ┌──────────┐                    ┌──────────┐  │
-│  │   WP     │───▶│ Compress │───────────────────▶│  Upload  │──┼──▶ Cloud Storage
-│  │  Sites   │    │(tar+pigz)│                    │ (rclone) │  │
+│  │   Web    │───▶│ Compress │───────────────────▶│  Upload  │──┼──▶ Cloud Storage
+│  │   Apps   │    │(tar+pigz)│                    │ (rclone) │  │
 │  └──────────┘    └──────────┘                    └──────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -56,7 +56,8 @@ This tool provides exactly that.
 ## Features
 
 - 🗄️ **Database Backups** — All MySQL/MariaDB databases, individually compressed and encrypted
-- 📁 **WordPress File Backups** — Auto-detects WordPress sites in `/var/www/`
+- 📁 **Web App File Backups** — Backs up any web application (WordPress, Laravel, Node.js, PHP, static sites)
+- 🖥️ **Multi-Panel Support** — Auto-detects Enhance, xCloud, RunCloud, cPanel, Plesk, CloudPanel, CyberPanel, aaPanel, HestiaCP, Virtualmin
 - 🔐 **Machine-Bound Encryption** — Credentials encrypted with AES-256, tied to your server
 - ☁️ **Cloud Storage** — Supports 40+ providers via rclone (S3, B2, Wasabi, Google Drive, etc.)
 - ⏰ **Automated Scheduling** — Systemd timers with automatic retry and catch-up
@@ -154,7 +155,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.3.2                ║
+║              Backup Management Tool v1.4.0                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
