@@ -284,6 +284,7 @@ declare -A PANEL_DEFINITIONS=(
   ["enhance"]="Enhance|/var/www/*/public_html|public_html|service"
   ["xcloud"]="xCloud|/var/www/*/public_html|public_html|user"
   ["runcloud"]="RunCloud|/home/*/webapps/*|.|user"
+  ["ploi"]="Ploi|/home/*/*|.|user"
   ["cpanel"]="cPanel|/home/*/public_html|.|file"
   ["plesk"]="Plesk|/var/www/vhosts/*/httpdocs|.|service"
   ["cloudpanel"]="CloudPanel|/home/*/htdocs/*|.|service"
@@ -364,6 +365,12 @@ detect_panel_by_user() {
   # RunCloud - has runcloud user in /etc/passwd
   if user_exists "runcloud"; then
     echo "runcloud"
+    return 0
+  fi
+
+  # Ploi - has ploi user in /etc/passwd
+  if user_exists "ploi"; then
+    echo "ploi"
     return 0
   fi
 

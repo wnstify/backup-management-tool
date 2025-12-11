@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.2] - 2024-12-11
+
+### Added
+
+- **Ploi Panel Support**
+  - Added Ploi to supported panels list
+  - Path pattern: `/home/*/*` (domain folders directly in user home)
+  - Detection via `ploi` user in `/etc/passwd`
+  - Setup wizard now asks for database username (defaults to `ploi` when Ploi detected)
+
+### Changed
+
+- **Database Authentication Step**
+  - Setup wizard now prompts for database username (was hardcoded to `root`)
+  - Panel-aware defaults: Ploi defaults to `ploi`, others default to `root`
+  - Supports any MySQL/MariaDB user with appropriate permissions
+
+---
+
 ## [1.4.1] - 2024-12-11
 
 ### Added
@@ -32,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Multi-Panel Support**
-  - Auto-detects installed hosting panel (Enhance, xCloud, RunCloud, cPanel, Plesk, CloudPanel, CyberPanel, aaPanel, HestiaCP, Virtualmin)
+  - Auto-detects installed hosting panel (Enhance, xCloud, RunCloud, Ploi, cPanel, Plesk, CloudPanel, CyberPanel, aaPanel, HestiaCP, Virtualmin)
   - Panel presets with correct web path patterns for each panel
   - Custom path option for non-standard setups
   - New setup step (Step 1b) for web application paths configuration
@@ -79,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhance: `/var/www/*/public_html` (webroot: `public_html`) - detected via `appcd` service
   - xCloud: `/var/www/*/public_html` (webroot: `public_html`) - detected via `xcloud` user
   - RunCloud: `/home/*/webapps/*` (webroot: `.`) - detected via `runcloud` user
+  - Ploi: `/home/*/*` (webroot: `.`) - detected via `ploi` user
   - cPanel: `/home/*/public_html` (webroot: `.`)
   - Plesk: `/var/www/vhosts/*/httpdocs` (webroot: `.`)
   - CloudPanel: `/home/*/htdocs/*` (webroot: `.`)
@@ -349,6 +369,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.4.2 | 2024-12-11 | Ploi panel support, configurable database username |
 | 1.4.1 | 2024-12-11 | Database restore verification prompt, safer restore process |
 | 1.4.0 | 2024-12-11 | Multi-panel support, multi-app backup, smart site naming |
 | 1.3.2 | 2024-12-11 | Enhance panel / overlay container compatibility |

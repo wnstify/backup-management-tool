@@ -57,7 +57,7 @@ This tool provides exactly that.
 
 - 🗄️ **Database Backups** — All MySQL/MariaDB databases, individually compressed and encrypted
 - 📁 **Web App File Backups** — Backs up any web application (WordPress, Laravel, Node.js, PHP, static sites)
-- 🖥️ **Multi-Panel Support** — Auto-detects Enhance, xCloud, RunCloud, cPanel, Plesk, CloudPanel, CyberPanel, aaPanel, HestiaCP, Virtualmin
+- 🖥️ **Multi-Panel Support** — Auto-detects Enhance, xCloud, RunCloud, Ploi, cPanel, Plesk, CloudPanel, CyberPanel, aaPanel, HestiaCP, Virtualmin
 - 🔐 **Machine-Bound Encryption** — Credentials encrypted with AES-256, tied to your server
 - ☁️ **Cloud Storage** — Supports 40+ providers via rclone (S3, B2, Wasabi, Google Drive, etc.)
 - ⏰ **Automated Scheduling** — Systemd timers with automatic retry and catch-up
@@ -157,7 +157,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.4.1                ║
+║              Backup Management Tool v1.4.2                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 

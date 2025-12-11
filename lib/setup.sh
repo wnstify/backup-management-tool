@@ -103,16 +103,17 @@ run_setup() {
     echo "  2) Enhance      /var/www/*/public_html"
     echo "  3) xCloud       /var/www/*/public_html"
     echo "  4) RunCloud     /home/*/webapps/*"
-    echo "  5) cPanel       /home/*/public_html"
-    echo "  6) Plesk        /var/www/vhosts/*/httpdocs"
-    echo "  7) CloudPanel   /home/*/htdocs/*"
-    echo "  8) CyberPanel   /home/*/public_html"
-    echo "  9) aaPanel      /www/wwwroot/*"
-    echo " 10) HestiaCP     /home/*/web/*/public_html"
-    echo " 11) Virtualmin   /home/*/public_html"
-    echo " 12) Custom path"
+    echo "  5) Ploi         /home/*/*"
+    echo "  6) cPanel       /home/*/public_html"
+    echo "  7) Plesk        /var/www/vhosts/*/httpdocs"
+    echo "  8) CloudPanel   /home/*/htdocs/*"
+    echo "  9) CyberPanel   /home/*/public_html"
+    echo " 10) aaPanel      /www/wwwroot/*"
+    echo " 11) HestiaCP     /home/*/web/*/public_html"
+    echo " 12) Virtualmin   /home/*/public_html"
+    echo " 13) Custom path"
     echo
-    read -p "Select option [1-12] (default: 1): " PANEL_CHOICE
+    read -p "Select option [1-13] (default: 1): " PANEL_CHOICE
     PANEL_CHOICE=${PANEL_CHOICE:-1}
 
     case "$PANEL_CHOICE" in
@@ -122,14 +123,15 @@ run_setup() {
       2) PANEL_KEY="enhance" ;;
       3) PANEL_KEY="xcloud" ;;
       4) PANEL_KEY="runcloud" ;;
-      5) PANEL_KEY="cpanel" ;;
-      6) PANEL_KEY="plesk" ;;
-      7) PANEL_KEY="cloudpanel" ;;
-      8) PANEL_KEY="cyberpanel" ;;
-      9) PANEL_KEY="aapanel" ;;
-      10) PANEL_KEY="hestia" ;;
-      11) PANEL_KEY="virtualmin" ;;
-      12)
+      5) PANEL_KEY="ploi" ;;
+      6) PANEL_KEY="cpanel" ;;
+      7) PANEL_KEY="plesk" ;;
+      8) PANEL_KEY="cloudpanel" ;;
+      9) PANEL_KEY="cyberpanel" ;;
+      10) PANEL_KEY="aapanel" ;;
+      11) PANEL_KEY="hestia" ;;
+      12) PANEL_KEY="virtualmin" ;;
+      13)
         PANEL_KEY="custom"
         echo
         echo "Enter custom path pattern. Use * as wildcard for user/site directories."
@@ -184,7 +186,7 @@ run_setup() {
     esac
 
     # Get pattern and subdir from panel definition if not custom
-    if [[ "$PANEL_CHOICE" != "12" ]]; then
+    if [[ "$PANEL_CHOICE" != "13" ]]; then
       WEB_PATH_PATTERN="$(get_panel_info "$PANEL_KEY" "pattern")"
       WEBROOT_SUBDIR="$(get_panel_info "$PANEL_KEY" "webroot_subdir")"
     fi
@@ -234,10 +236,6 @@ run_setup() {
   if [[ "$DO_DATABASE" == "true" ]]; then
     echo "Step 3: Database Authentication"
     echo "--------------------------------"
-    echo "On many systems, root can access MySQL/MariaDB via socket authentication."
-    echo
-    read -p "Do you need to use a password for database access? (y/N): " USE_DB_PASSWORD
-    USE_DB_PASSWORD=${USE_DB_PASSWORD:-N}
 
     # Detect DB client
     local DB_CLIENT=""
@@ -251,18 +249,36 @@ run_setup() {
       return
     fi
 
+    # Determine default database user based on panel
+    local DEFAULT_DB_USER="root"
+    if [[ "${PANEL_KEY:-}" == "ploi" ]]; then
+      DEFAULT_DB_USER="ploi"
+      echo "Ploi panel detected - default database user is 'ploi'"
+      echo
+    else
+      echo "On many systems, root can access MySQL/MariaDB via socket authentication."
+      echo
+    fi
+
+    read -p "Do you need to use a password for database access? (y/N): " USE_DB_PASSWORD
+    USE_DB_PASSWORD=${USE_DB_PASSWORD:-N}
+
     if [[ "$USE_DB_PASSWORD" =~ ^[Yy]$ ]]; then
-      read -sp "Enter database root password: " DB_ROOT_PASSWORD
+      # Ask for username (with panel-aware default)
+      read -p "Enter database username (default: $DEFAULT_DB_USER): " DB_USER
+      DB_USER="${DB_USER:-$DEFAULT_DB_USER}"
+
+      read -sp "Enter database password for '$DB_USER': " DB_PASSWORD
       echo
 
-      if "$DB_CLIENT" -u root -p"$DB_ROOT_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
+      if "$DB_CLIENT" -u "$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; then
         print_success "Database connection successful."
-        store_secret "$SECRETS_DIR" "$SECRET_DB_USER" "root"
-        store_secret "$SECRETS_DIR" "$SECRET_DB_PASS" "$DB_ROOT_PASSWORD"
+        store_secret "$SECRETS_DIR" "$SECRET_DB_USER" "$DB_USER"
+        store_secret "$SECRETS_DIR" "$SECRET_DB_PASS" "$DB_PASSWORD"
         HAVE_DB_CREDS=true
         print_success "Database credentials stored securely."
       else
-        print_error "Could not connect to database. Please check password."
+        print_error "Could not connect to database. Please check username/password."
         press_enter_to_continue
         return
       fi
