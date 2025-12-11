@@ -509,18 +509,100 @@ echo "Restoring ${#SELECTED_DBS[@]} database(s)..."
 read -p "Confirm? (yes/no): " confirm
 [[ ! "$confirm" =~ ^[Yy][Ee][Ss]$ ]] && exit 0
 
+declare -a RESTORED_FILES=()
+declare -a RESTORED_NAMES=()
+
 for sql_file in "${SELECTED_DBS[@]}"; do
   db_name="$(basename "$sql_file" | sed -E 's/-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}\.sql\.gz$//')"
   echo "Restoring: $db_name"
   if gunzip -c "$sql_file" | $DB_CLIENT "${MYSQL_ARGS[@]}" 2>/dev/null; then
     echo "  Success"
+    RESTORED_FILES+=("$sql_file")
+    RESTORED_NAMES+=("$db_name")
   else
     echo "  Failed"
   fi
 done
 
 echo
-echo "Restore complete!"
+echo "========================================================"
+echo "           IMPORTANT: Verify Your Site"
+echo "========================================================"
+echo
+echo "Database restore completed. Before we clean up the backup"
+echo "files, please verify that your website is working correctly."
+echo
+echo "Check your website now, then return here."
+echo
+echo "------------------------------------------------------------------------"
+echo "If your site is working correctly:"
+echo "  Type exactly: Yes, I checked the website"
+echo
+echo "If your site is NOT working (quick option):"
+echo "  Type: N"
+echo "  (We will save the SQL files to /root/ for manual recovery)"
+echo "------------------------------------------------------------------------"
+echo
+read -p "Your response: " VERIFY_RESPONSE
+
+if [[ "$VERIFY_RESPONSE" == "Yes, I checked the website" ]]; then
+  echo
+  echo "$LOG_PREFIX Site verified. Cleaning up backup files..."
+  echo "$LOG_PREFIX Restore complete!"
+elif [[ "$VERIFY_RESPONSE" =~ ^[Nn]$ ]]; then
+  echo
+  echo "$LOG_PREFIX Site not working. Saving SQL files for manual recovery..."
+
+  # Create recovery directory
+  RECOVERY_DIR="/root/db-restore-recovery-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$RECOVERY_DIR"
+  chmod 700 "$RECOVERY_DIR"
+
+  # Copy all restored SQL files
+  for sql_file in "${RESTORED_FILES[@]}"; do
+    cp "$sql_file" "$RECOVERY_DIR/"
+    echo "$LOG_PREFIX   Saved: $(basename "$sql_file")"
+  done
+
+  echo
+  echo "========================================================"
+  echo "           SQL Files Saved"
+  echo "========================================================"
+  echo
+  echo "Your SQL backup files have been saved to:"
+  echo "  $RECOVERY_DIR"
+  echo
+  echo "To manually restore a database:"
+  echo "  gunzip -c $RECOVERY_DIR/DBNAME-*.sql.gz | mysql DBNAME"
+  echo
+  echo "Or to view the SQL without restoring:"
+  echo "  gunzip -c $RECOVERY_DIR/DBNAME-*.sql.gz | less"
+  echo
+  echo "Remember to delete these files after you're done:"
+  echo "  rm -rf $RECOVERY_DIR"
+  echo
+else
+  echo
+  echo "$LOG_PREFIX Invalid response. Saving SQL files as a precaution..."
+
+  # Create recovery directory
+  RECOVERY_DIR="/root/db-restore-recovery-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$RECOVERY_DIR"
+  chmod 700 "$RECOVERY_DIR"
+
+  # Copy all restored SQL files
+  for sql_file in "${RESTORED_FILES[@]}"; do
+    cp "$sql_file" "$RECOVERY_DIR/"
+    echo "$LOG_PREFIX   Saved: $(basename "$sql_file")"
+  done
+
+  echo
+  echo "SQL files saved to: $RECOVERY_DIR"
+  echo "Delete after verification: rm -rf $RECOVERY_DIR"
+fi
+
+echo
+echo "Done."
 DBRESTOREEOF
 
   sed -i \

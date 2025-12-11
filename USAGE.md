@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.3.2** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.4.1** by Webnestify.
 
 ## Table of Contents
 
@@ -75,7 +75,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.3.2
+       Backup Management Tool v1.4.1
                   by Webnestify
 ========================================================
 
@@ -106,7 +106,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.3.2
+       Backup Management Tool v1.4.1
                   by Webnestify
 ========================================================
 
@@ -697,8 +697,62 @@ Restoring: wordpress_site1
 Restoring: wordpress_site2
   ✓ Success
 
-Restore complete!
+========================================================
+           IMPORTANT: Verify Your Site
+========================================================
+
+Database restore completed. Before we clean up the backup
+files, please verify that your website is working correctly.
+
+Check your website now, then return here.
+
+------------------------------------------------------------------------
+If your site is working correctly:
+  Type exactly: Yes, I checked the website
+
+If your site is NOT working (quick option):
+  Type: N
+  (We will save the SQL files to /root/ for manual recovery)
+------------------------------------------------------------------------
+
+Your response: Yes, I checked the website
+
+[DB-RESTORE] Site verified. Cleaning up backup files...
+[DB-RESTORE] Restore complete!
+
+Done.
 ```
+
+**If site is NOT working (type N):**
+```
+Your response: N
+
+[DB-RESTORE] Site not working. Saving SQL files for manual recovery...
+[DB-RESTORE]   Saved: wordpress_site1-2025-01-15-0300.sql.gz
+[DB-RESTORE]   Saved: wordpress_site2-2025-01-15-0300.sql.gz
+
+========================================================
+           SQL Files Saved
+========================================================
+
+Your SQL backup files have been saved to:
+  /root/db-restore-recovery-20250115-120000
+
+To manually restore a database:
+  gunzip -c /root/db-restore-recovery-20250115-120000/DBNAME-*.sql.gz | mysql DBNAME
+
+Or to view the SQL without restoring:
+  gunzip -c /root/db-restore-recovery-20250115-120000/DBNAME-*.sql.gz | less
+
+Remember to delete these files after you're done:
+  rm -rf /root/db-restore-recovery-20250115-120000
+```
+
+**Safety Features:**
+- Backup files are NOT deleted until you verify site is working
+- Quick `N` option saves SQL files to `/root/` for manual recovery
+- Invalid responses also save files as a precaution
+- Saved SQL files can be manually re-imported if needed
 
 ### Files Restoration
 

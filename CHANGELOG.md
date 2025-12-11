@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.1] - 2024-12-11
+
+### Added
+
+- **Database Restore Verification Prompt**
+  - After database restore, user must verify their site is working before cleanup
+  - Type `Yes, I checked the website` to confirm site works and clean up backup files
+  - Type `N` to save SQL files to `/root/db-restore-recovery-TIMESTAMP/` for manual recovery
+  - Invalid responses also save files as a precaution
+  - Prevents accidental loss of backup files if restore causes issues
+
+### Fixed
+
+- **Database Restore Safety**
+  - Previously, downloaded backup files were deleted immediately after restore
+  - Now SQL files are preserved until user confirms site is working
+  - If site has issues, user can access saved SQL files for manual recovery
+
+---
+
 ## [1.4.0] - 2024-12-11
 
 ### Added
@@ -329,6 +349,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.4.1 | 2024-12-11 | Database restore verification prompt, safer restore process |
 | 1.4.0 | 2024-12-11 | Multi-panel support, multi-app backup, smart site naming |
 | 1.3.2 | 2024-12-11 | Enhance panel / overlay container compatibility |
 | 1.3.1 | 2024-12-11 | Fixed files restore for per-site archives |

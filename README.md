@@ -155,7 +155,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.4.0                ║
+║              Backup Management Tool v1.4.1                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
@@ -362,6 +362,37 @@ The restore wizard:
 6. Verifies restoration
 
 **Always test restores** before you need them!
+
+### Database Restoration — IMPORTANT
+
+> **The database backup contains table structures and data only. It does NOT contain MySQL users or permissions.**
+
+| Scenario | Will Restore Work? |
+|----------|-------------------|
+| Tables deleted, database exists | Yes |
+| Database deleted, user exists | Yes (if backup has `CREATE DATABASE`) |
+| Database AND user deleted | **No** — user/grants must be recreated first |
+
+**If you deleted the database AND the database user**, you must manually recreate them before restoring:
+
+```bash
+# 1. Create the database
+mysql -u root -p -e "CREATE DATABASE mydb;"
+
+# 2. Create the user
+mysql -u root -p -e "CREATE USER 'myuser'@'localhost' IDENTIFIED BY 'password';"
+
+# 3. Grant permissions
+mysql -u root -p -e "GRANT ALL PRIVILEGES ON mydb.* TO 'myuser'@'localhost';"
+mysql -u root -p -e "FLUSH PRIVILEGES;"
+
+# 4. Now run the restore via backup-management menu
+sudo backup-management  # Select "Restore from Backup" → "Database"
+```
+
+**Important:** The database credentials must match what's in your application's config file (`wp-config.php` for WordPress, `.env` for Laravel, etc.). If you create a new user with different credentials, update your application config accordingly.
+
+This is standard behavior for database backup tools — they backup data, not MySQL system users.
 
 ---
 
