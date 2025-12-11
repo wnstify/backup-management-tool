@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.2] - 2024-12-11
+
+### Fixed
+
+- **Enhance Panel / Overlay Container Compatibility**
+  - Complete rewrite of backup/restore architecture for containerized hosting panels
+  - Backups now archive **contents inside** `public_html` instead of the entire site directory
+  - Restores extract **into** existing `public_html` directory, preserving container overlay
+  - Fixes "empty directory" issue where restored files weren't visible to users in overlay containers
+  - Backward compatible: automatically detects and handles old backup format
+
+### Added
+
+- **Restore Path Metadata**
+  - New `.restore-path` metadata file uploaded with each backup
+  - Stores exact restore path for reliable restore operations
+  - Eliminates guesswork when matching backup to site directory
+
+### Changed
+
+- **Backup Format**
+  - Archives now contain `./` (contents) instead of `dirname/` (full directory)
+  - Ownership now set based on target directory owner after extraction
+  - Removes dependency on stored UIDs which may become invalid after user recreation
+
+---
+
 ## [1.3.1] - 2024-12-11
 
 ### Fixed
@@ -239,6 +266,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.3.2 | 2024-12-11 | Enhance panel / overlay container compatibility |
 | 1.3.1 | 2024-12-11 | Fixed files restore for per-site archives |
 | 1.3.0 | 2024-12-11 | Modular architecture, code refactoring |
 | 1.2.0 | 2024-12-09 | Checksums, backup integrity verification |

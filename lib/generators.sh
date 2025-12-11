@@ -701,10 +701,32 @@ for site_path in "$WWW_DIR"/*/; do
   archive_path="$TEMP_DIR/${base_name}-${STAMP}.tar.gz"
 
   echo "$LOG_PREFIX [$site_name] Archiving..."
-  if tar --numeric-owner --warning=no-file-changed --ignore-failed-read -I pigz -cpf "$archive_path" -C "$WWW_DIR" "$site_name" 2>/dev/null; then
-    tar_status=0
+
+  # Archive CONTENTS of public_html (not the directory itself)
+  # This allows restore to extract INTO existing public_html without replacing it
+  # Critical for panels like Enhance that use overlay containers
+  #
+  # We also create a metadata file that stores the restore path
+  metadata_file="$TEMP_DIR/${base_name}.restore-path"
+
+  if [[ -d "$site_path/public_html" ]]; then
+    # Store restore path in metadata
+    echo "$site_path/public_html" > "$metadata_file"
+    # Archive contents of public_html
+    if tar --warning=no-file-changed --ignore-failed-read -I pigz -cpf "$archive_path" -C "$site_path/public_html" . 2>/dev/null; then
+      tar_status=0
+    else
+      tar_status=$?
+    fi
   else
-    tar_status=$?
+    # No public_html, store site path
+    echo "$site_path" > "$metadata_file"
+    # Archive the site directory contents directly
+    if tar --warning=no-file-changed --ignore-failed-read -I pigz -cpf "$archive_path" -C "$site_path" . 2>/dev/null; then
+      tar_status=0
+    else
+      tar_status=$?
+    fi
   fi
 
   # tar exit code 1 = files changed during archive (acceptable)
@@ -722,12 +744,14 @@ for site_path in "$WWW_DIR"/*/; do
   if timeout 3600 rclone copy "$archive_path" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 --low-level-retries 10; then
     # Upload checksum file
     timeout 60 rclone copy "$checksum_file" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 || echo "$LOG_PREFIX [$site_name] Checksum upload failed (backup OK)"
-    rm -f "$archive_path" "$checksum_file"
+    # Upload restore-path metadata file
+    timeout 60 rclone copy "$metadata_file" "$RCLONE_REMOTE:$RCLONE_PATH" --retries 3 || echo "$LOG_PREFIX [$site_name] Metadata upload failed (backup OK)"
+    rm -f "$archive_path" "$checksum_file" "$metadata_file"
     ((success_count++)) || true
     echo "$LOG_PREFIX [$site_name] Done"
   else
     echo "$LOG_PREFIX [$site_name] Upload failed"
-    rm -f "$checksum_file"
+    rm -f "$checksum_file" "$metadata_file"
     failures+=("$site_name")
   fi
 done
@@ -952,35 +976,120 @@ for site in "${SELECTED_SITES[@]}"; do
     echo "$LOG_PREFIX   [INFO] No checksum file found"
   fi
 
-  # Get the actual directory name from inside the archive
-  dir_name=$(tar -tzf "$local_file" 2>/dev/null | head -1 | cut -d'/' -f1)
-  if [[ -z "$dir_name" ]]; then
-    echo "$LOG_PREFIX   [ERROR] Could not determine directory name from archive"
-    rm -f "$local_file"
-    continue
+  # Download restore-path metadata file to determine where to extract
+  restore_path_file="${site}.restore-path"
+  restore_path=""
+  if rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$restore_path_file" "$TEMP_DIR/" 2>/dev/null; then
+    restore_path=$(cat "$TEMP_DIR/$restore_path_file" 2>/dev/null)
+    rm -f "$TEMP_DIR/$restore_path_file"
+    echo "$LOG_PREFIX   Restore path from metadata: $restore_path"
   fi
 
-  echo "$LOG_PREFIX   Extracting to: $WWW_DIR/$dir_name"
-
-  # Backup existing directory if it exists
-  backup_name=""
-  if [[ -d "$WWW_DIR/$dir_name" ]]; then
-    backup_name="${dir_name}.pre-restore-$(date +%Y%m%d-%H%M%S)"
-    echo "$LOG_PREFIX   Backing up existing to: $backup_name"
-    mv "$WWW_DIR/$dir_name" "$WWW_DIR/$backup_name"
+  # If no metadata file, try to determine restore path from archive or site name
+  if [[ -z "$restore_path" ]]; then
+    # Check archive structure - old format had directory name, new format has ./
+    first_entry=$(tar -tzf "$local_file" 2>/dev/null | head -1)
+    if [[ "$first_entry" == "./" || "$first_entry" == "." ]]; then
+      # New format: contents only, need to find matching site directory
+      echo "$LOG_PREFIX   [INFO] New backup format detected (contents only)"
+      # Try to find a matching directory in /var/www
+      for potential_dir in "$WWW_DIR"/*/; do
+        [[ ! -d "$potential_dir" ]] && continue
+        # Check if this site's sanitized name matches
+        if [[ -d "${potential_dir}public_html" ]]; then
+          restore_path="${potential_dir}public_html"
+          break
+        fi
+      done
+      if [[ -z "$restore_path" ]]; then
+        echo "$LOG_PREFIX   [ERROR] Could not determine restore path. No metadata file and no matching directory found."
+        echo "$LOG_PREFIX   [HINT] For new backups, metadata file will be created automatically."
+        rm -f "$local_file"
+        continue
+      fi
+    else
+      # Old format: archive contains directory name
+      dir_name=$(echo "$first_entry" | cut -d'/' -f1)
+      if [[ -z "$dir_name" ]]; then
+        echo "$LOG_PREFIX   [ERROR] Could not determine directory name from archive"
+        rm -f "$local_file"
+        continue
+      fi
+      restore_path="$WWW_DIR/$dir_name"
+      echo "$LOG_PREFIX   [INFO] Old backup format detected, restoring to: $restore_path"
+    fi
   fi
 
-  # Extract
-  if tar -xzf "$local_file" -C "$WWW_DIR" 2>/dev/null; then
-    echo "$LOG_PREFIX   Success"
-    # Remove temp backup on success
-    [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && rm -rf "$WWW_DIR/$backup_name"
+  echo "$LOG_PREFIX   Extracting to: $restore_path"
+
+  # For new format (contents only), extract INTO the existing directory
+  # For old format, extract the directory itself
+  first_entry=$(tar -tzf "$local_file" 2>/dev/null | head -1)
+  if [[ "$first_entry" == "./" || "$first_entry" == "." ]]; then
+    # NEW FORMAT: Contents only - extract INTO existing directory
+    # This preserves the public_html directory itself (important for overlay containers)
+
+    if [[ ! -d "$restore_path" ]]; then
+      echo "$LOG_PREFIX   [ERROR] Restore path does not exist: $restore_path"
+      rm -f "$local_file"
+      continue
+    fi
+
+    # Backup existing contents (not the directory itself)
+    backup_name=""
+    backup_path="${restore_path}.contents-backup-$(date +%Y%m%d-%H%M%S)"
+    echo "$LOG_PREFIX   Backing up existing contents..."
+    if mkdir -p "$backup_path" && cp -a "$restore_path"/. "$backup_path"/ 2>/dev/null; then
+      backup_name="$backup_path"
+    else
+      echo "$LOG_PREFIX   [WARNING] Could not backup existing contents"
+    fi
+
+    # Clear existing contents and extract new ones
+    echo "$LOG_PREFIX   Clearing existing contents..."
+    find "$restore_path" -mindepth 1 -delete 2>/dev/null || rm -rf "$restore_path"/* "$restore_path"/.[!.]* 2>/dev/null
+
+    if tar -xzf "$local_file" -C "$restore_path" 2>/dev/null; then
+      echo "$LOG_PREFIX   Success"
+      # Fix ownership - set to directory owner
+      dir_owner=$(stat -c '%U:%G' "$restore_path" 2>/dev/null || echo "www-data:www-data")
+      chown -R "$dir_owner" "$restore_path" 2>/dev/null || true
+      echo "$LOG_PREFIX   Ownership set to: $dir_owner"
+      # Remove backup on success
+      [[ -n "$backup_name" && -d "$backup_name" ]] && rm -rf "$backup_name"
+    else
+      echo "$LOG_PREFIX   [ERROR] Extraction failed"
+      # Restore backup if we made one
+      if [[ -n "$backup_name" && -d "$backup_name" ]]; then
+        rm -rf "$restore_path"/* "$restore_path"/.[!.]* 2>/dev/null
+        cp -a "$backup_name"/. "$restore_path"/ 2>/dev/null
+        rm -rf "$backup_name"
+        echo "$LOG_PREFIX   Restored original contents"
+      fi
+    fi
   else
-    echo "$LOG_PREFIX   [ERROR] Extraction failed"
-    # Restore the backup if we made one
-    if [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]]; then
-      mv "$WWW_DIR/$backup_name" "$WWW_DIR/$dir_name"
-      echo "$LOG_PREFIX   Restored original directory"
+    # OLD FORMAT: Archive contains full directory - replace entire directory
+    dir_name=$(echo "$first_entry" | cut -d'/' -f1)
+
+    # Backup existing directory if it exists
+    backup_name=""
+    if [[ -d "$WWW_DIR/$dir_name" ]]; then
+      backup_name="${dir_name}.pre-restore-$(date +%Y%m%d-%H%M%S)"
+      echo "$LOG_PREFIX   Backing up existing to: $backup_name"
+      mv "$WWW_DIR/$dir_name" "$WWW_DIR/$backup_name"
+    fi
+
+    if tar -xzf "$local_file" -C "$WWW_DIR" 2>/dev/null; then
+      echo "$LOG_PREFIX   Success"
+      # Remove temp backup on success
+      [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && rm -rf "$WWW_DIR/$backup_name"
+    else
+      echo "$LOG_PREFIX   [ERROR] Extraction failed"
+      # Restore the backup if we made one
+      if [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]]; then
+        mv "$WWW_DIR/$backup_name" "$WWW_DIR/$dir_name"
+        echo "$LOG_PREFIX   Restored original directory"
+      fi
     fi
   fi
 

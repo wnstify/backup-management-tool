@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.3.1** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.3.2** by Webnestify.
 
 ## Table of Contents
 
@@ -75,7 +75,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.3.1
+       Backup Management Tool v1.3.2
                   by Webnestify
 ========================================================
 
@@ -106,7 +106,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.3.1
+       Backup Management Tool v1.3.2
                   by Webnestify
 ========================================================
 
