@@ -140,7 +140,9 @@ That's it! The wizard will guide you through configuration.
 ├── backup-management-db.service
 ├── backup-management-db.timer
 ├── backup-management-files.service
-└── backup-management-files.timer
+├── backup-management-files.timer
+├── backup-management-verify.service
+└── backup-management-verify.timer
 ```
 
 ---
