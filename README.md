@@ -423,6 +423,7 @@ You'll be asked whether to keep or remove configuration and secrets.
 
 - [CHANGELOG.md](CHANGELOG.md) — Version history and changes
 - [USAGE.md](USAGE.md) — Detailed usage guide
+- [SECURITY.md](SECURITY.md) — Security policy and best practices
 - [DISCLAIMER.md](DISCLAIMER.md) — Legal disclaimer and responsibilities
 
 ---
