@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.2.0** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.3.1** by Webnestify.
 
 ## Table of Contents
 
@@ -75,7 +75,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.2.0
+       Backup Management Tool v1.3.1
                   by Webnestify
 ========================================================
 
@@ -106,7 +106,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.2.0
+       Backup Management Tool v1.3.1
                   by Webnestify
 ========================================================
 
@@ -702,39 +702,75 @@ Restore complete!
 
 ### Files Restoration
 
+Each site is backed up as a separate archive for easier restore. The restore utility groups backups by site and shows the latest available backup for each.
+
 ```
 ========================================================
            Files Restore Utility
 ========================================================
 
-Step 1: Select Backup
----------------------
+Step 1: Select Site Backup
+--------------------------
 [FILES-RESTORE] Fetching backups from b2:myserver/file-backups...
-[FILES-RESTORE] Found 3 backup(s).
+[FILES-RESTORE] Found 3 site(s) with backups.
 
-   1) https__site1.com-2025-01-15-0300.tar.gz
-   2) https__site2.com-2025-01-15-0300.tar.gz
+Available sites:
+   1) https__site1.com
+      Latest: https__site1.com-2025-01-15-0300.tar.gz
+   2) https__site2.com
+      Latest: https__site2.com-2025-01-15-0300.tar.gz
+   3) blog.example.com
+      Latest: blog.example.com-2025-01-14-0300.tar.gz
+
+  A) Restore all sites (latest backup of each)
   Q) Quit
 
-Select backup [1-2]:
+Select site(s) to restore [1-3, comma-separated, A for all]: 1,2
 ```
 
-**Step 2: Select Sites**
+**Step 2: Confirm Restore**
 ```
-Step 2: Select Sites
---------------------
-   1) [EXISTS]   site1.com
-   2) [NEW]      site3.com
-  A) All sites
-  Q) Quit
+Step 2: Confirm Restore
+-----------------------
+Sites to restore:
+  - https__site1.com (https__site1.com-2025-01-15-0300.tar.gz)
+  - https__site2.com (https__site2.com-2025-01-15-0300.tar.gz)
 
-Selection: 1
+This will OVERWRITE existing sites. Continue? (yes/no): yes
+```
+
+**Step 3: Restoring Sites**
+```
+Step 3: Restoring Sites
+-----------------------
+
+[FILES-RESTORE] Restoring: https__site1.com
+[FILES-RESTORE]   Backup: https__site1.com-2025-01-15-0300.tar.gz
+[FILES-RESTORE]   Downloading...
+[FILES-RESTORE]   Verifying checksum...
+[FILES-RESTORE]   Checksum: OK
+[FILES-RESTORE]   Extracting to: /var/www/site1.com
+[FILES-RESTORE]   Backing up existing to: site1.com.pre-restore-20250115-120000
+[FILES-RESTORE]   Success
+
+[FILES-RESTORE] Restoring: https__site2.com
+[FILES-RESTORE]   Backup: https__site2.com-2025-01-15-0300.tar.gz
+[FILES-RESTORE]   Downloading...
+[FILES-RESTORE]   Checksum: OK
+[FILES-RESTORE]   Extracting to: /var/www/site2.com
+[FILES-RESTORE]   Success
+
+========================================================
+           Restore Complete!
+========================================================
 ```
 
 **Safety Features:**
-- Existing sites are backed up before overwriting
+- Each site backed up as separate archive for selective restore
+- Existing sites are backed up before overwriting (`site.pre-restore-timestamp`)
 - If restore fails, original is automatically restored
-- Clear labeling of existing vs. new sites
+- Checksum verification before extraction
+- Supports restoring one, multiple, or all sites at once
 
 ---
 

@@ -101,16 +101,29 @@ That's it! The wizard will guide you through configuration.
 
 ```
 /etc/backup-management/
-├── backup-management.sh      # Main script
+├── backup-management.sh      # Main script (entry point)
+├── lib/                      # Modular library (v1.3.0+)
+│   ├── core.sh               # Colors, validation, helpers
+│   ├── crypto.sh             # Encryption, secrets
+│   ├── config.sh             # Configuration read/write
+│   ├── generators.sh         # Script generation
+│   ├── status.sh             # Status display
+│   ├── backup.sh             # Backup execution
+│   ├── verify.sh             # Integrity verification
+│   ├── restore.sh            # Restore execution
+│   ├── schedule.sh           # Schedule management
+│   └── setup.sh              # Setup wizard
 ├── .config                   # Configuration (retention, paths, etc.)
 ├── scripts/
 │   ├── db_backup.sh          # Database backup script
 │   ├── db_restore.sh         # Database restore script
 │   ├── files_backup.sh       # Files backup script
-│   └── files_restore.sh      # Files restore script
+│   ├── files_restore.sh      # Files restore script
+│   └── verify_backup.sh      # Integrity verification script
 └── logs/
     ├── db_logfile.log        # Database backup logs (auto-rotated)
-    └── files_logfile.log     # Files backup logs (auto-rotated)
+    ├── files_logfile.log     # Files backup logs (auto-rotated)
+    └── verify_logfile.log    # Verification logs (auto-rotated)
 
 /etc/.{random}/               # Encrypted secrets (hidden, immutable)
 ├── .s                        # Salt for key derivation
@@ -141,7 +154,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.2.0                ║
+║              Backup Management Tool v1.3.1                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 

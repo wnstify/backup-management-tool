@@ -15,7 +15,7 @@
 # ============================================================================
 set -euo pipefail
 
-VERSION="1.3.0"
+VERSION="1.3.1"
 AUTHOR="Webnestify"
 WEBSITE="https://webnestify.cloud"
 INSTALL_DIR="/etc/backup-management"

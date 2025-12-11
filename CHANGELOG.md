@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] - 2024-12-11
+
+### Fixed
+
+- **Files Restore Script**
+  - Fixed restore to work with per-site archives (each site has its own backup file)
+  - Restore now groups backups by site name and shows latest backup for each
+  - Supports restoring multiple sites individually or all at once
+  - Properly extracts directory name from archive instead of assuming single archive
+
+---
+
 ## [1.3.0] - 2024-12-11
 
 ### Added
@@ -227,6 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.3.1 | 2024-12-11 | Fixed files restore for per-site archives |
 | 1.3.0 | 2024-12-11 | Modular architecture, code refactoring |
 | 1.2.0 | 2024-12-09 | Checksums, backup integrity verification |
 | 1.1.1 | 2024-12-09 | Retention cleanup notifications |

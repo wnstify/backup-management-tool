@@ -840,107 +840,157 @@ echo
 TEMP_DIR="$(mktemp -d)"
 trap "rm -rf '$TEMP_DIR'" EXIT
 
-echo "Step 1: Select Backup"
-echo "---------------------"
+echo "Step 1: Select Site Backup"
+echo "--------------------------"
 echo "$LOG_PREFIX Fetching backups from $RCLONE_REMOTE:$RCLONE_PATH..."
 
-declare -a ALL_BACKUPS=()
+# Get unique site names from backups (each site has its own archive)
+declare -A SITE_BACKUPS=()
+declare -a SITE_NAMES=()
+
 remote_files="$(rclone lsf "$RCLONE_REMOTE:$RCLONE_PATH" --include "*.tar.gz" --exclude "*.sha256" 2>/dev/null | sort -r)" || true
-while IFS= read -r f; do [[ -n "$f" ]] && ALL_BACKUPS+=("$f"); done <<< "$remote_files"
 
-echo "$LOG_PREFIX Found ${#ALL_BACKUPS[@]} backup(s)."
-[[ ${#ALL_BACKUPS[@]} -eq 0 ]] && { echo "$LOG_PREFIX No backups found."; exit 1; }
-
-echo
-for i in "${!ALL_BACKUPS[@]}"; do
-  printf "  %2d) %s\n" "$((i+1))" "${ALL_BACKUPS[$i]}"
-done
-echo "  Q) Quit"
-echo
-read -p "Select backup [1-${#ALL_BACKUPS[@]}]: " sel
-[[ "$sel" =~ ^[Qq]$ ]] && exit 0
-[[ ! "$sel" =~ ^[0-9]+$ ]] && exit 1
-SELECTED="${ALL_BACKUPS[$((sel-1))]}"
-
-echo
-echo "$LOG_PREFIX Downloading $SELECTED..."
-rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$SELECTED" "$TEMP_DIR/" --progress
-BACKUP_FILE="$TEMP_DIR/$SELECTED"
-
-# Download and verify checksum if available
-CHECKSUM_FILE="${SELECTED}.sha256"
-if rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$CHECKSUM_FILE" "$TEMP_DIR/" 2>/dev/null; then
-  echo "$LOG_PREFIX Verifying checksum..."
-  STORED_CHECKSUM=$(cat "$TEMP_DIR/$CHECKSUM_FILE")
-  CALCULATED_CHECKSUM=$(sha256sum "$BACKUP_FILE" | awk '{print $1}')
-  if [[ "$STORED_CHECKSUM" == "$CALCULATED_CHECKSUM" ]]; then
-    echo "$LOG_PREFIX Checksum verified"
-  else
-    echo "$LOG_PREFIX [ERROR] Checksum mismatch! Backup may be corrupted."
-    echo "$LOG_PREFIX   Expected: $STORED_CHECKSUM"
-    echo "$LOG_PREFIX   Got:      $CALCULATED_CHECKSUM"
-    read -p "Continue anyway? (y/N): " continue_anyway
-    [[ ! "$continue_anyway" =~ ^[Yy]$ ]] && exit 1
+# Group backups by site name (format: sitename-YYYY-MM-DD-HHMM.tar.gz)
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  # Extract site name (everything before the timestamp)
+  site_name=$(echo "$f" | sed -E 's/-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}\.tar\.gz$//')
+  if [[ -n "$site_name" ]]; then
+    if [[ -z "${SITE_BACKUPS[$site_name]:-}" ]]; then
+      SITE_NAMES+=("$site_name")
+      SITE_BACKUPS[$site_name]="$f"  # Store most recent (already sorted)
+    fi
   fi
-else
-  echo "$LOG_PREFIX [INFO] No checksum file found (backup may predate checksum feature)"
-fi
+done <<< "$remote_files"
+
+echo "$LOG_PREFIX Found ${#SITE_NAMES[@]} site(s) with backups."
+[[ ${#SITE_NAMES[@]} -eq 0 ]] && { echo "$LOG_PREFIX No backups found."; exit 1; }
 
 echo
-echo "Step 2: Select Sites"
-echo "--------------------"
-mapfile -t SITES < <(tar -tzf "$BACKUP_FILE" 2>/dev/null | grep -E '^[^/]+/$' | sed 's|/$||' | sort -u)
-[[ ${#SITES[@]} -eq 0 ]] && { echo "No sites found in backup."; exit 1; }
-
-for i in "${!SITES[@]}"; do
-  site="${SITES[$i]}"
-  [[ -d "$WWW_DIR/$site" ]] && tag="[EXISTS]" || tag="[NEW]"
-  printf "  %2d) %-10s %s\n" "$((i+1))" "$tag" "$site"
+echo "Available sites:"
+for i in "${!SITE_NAMES[@]}"; do
+  site="${SITE_NAMES[$i]}"
+  latest="${SITE_BACKUPS[$site]}"
+  # Check if site exists locally
+  # Try to match site name to actual directory (site name is sanitized)
+  [[ -d "$WWW_DIR" ]] && exists_tag="[EXISTS]" || exists_tag="[NEW]"
+  printf "  %2d) %s\n" "$((i+1))" "$site"
+  printf "      Latest: %s\n" "$latest"
 done
-echo "  A) All sites"
+echo
+echo "  A) Restore all sites (latest backup of each)"
 echo "  Q) Quit"
 echo
-read -p "Selection: " site_sel
-[[ "$site_sel" =~ ^[Qq]$ ]] && exit 0
+read -p "Select site(s) to restore [1-${#SITE_NAMES[@]}, comma-separated, A for all]: " sel
+[[ "$sel" =~ ^[Qq]$ ]] && exit 0
 
 declare -a SELECTED_SITES=()
-if [[ "$site_sel" =~ ^[Aa]$ ]]; then
-  SELECTED_SITES=("${SITES[@]}")
+if [[ "$sel" =~ ^[Aa]$ ]]; then
+  SELECTED_SITES=("${SITE_NAMES[@]}")
 else
-  IFS=',' read -ra sels <<< "$site_sel"
+  IFS=',' read -ra sels <<< "$sel"
   for s in "${sels[@]}"; do
     s="$(echo "$s" | tr -d ' ')"
-    [[ "$s" =~ ^[0-9]+$ ]] && SELECTED_SITES+=("${SITES[$((s-1))]}")
+    if [[ "$s" =~ ^[0-9]+$ ]] && [[ $s -ge 1 ]] && [[ $s -le ${#SITE_NAMES[@]} ]]; then
+      SELECTED_SITES+=("${SITE_NAMES[$((s-1))]}")
+    fi
   done
 fi
 
+[[ ${#SELECTED_SITES[@]} -eq 0 ]] && { echo "No sites selected."; exit 0; }
+
 echo
-echo "Sites to restore: ${SELECTED_SITES[*]}"
+echo "Step 2: Confirm Restore"
+echo "-----------------------"
+echo "Sites to restore:"
+for site in "${SELECTED_SITES[@]}"; do
+  echo "  - $site (${SITE_BACKUPS[$site]})"
+done
+echo
 read -p "This will OVERWRITE existing sites. Continue? (yes/no): " confirm
 [[ ! "$confirm" =~ ^[Yy][Ee][Ss]$ ]] && exit 0
 
-for site in "${SELECTED_SITES[@]}"; do
-  echo "Restoring: $site"
-  backup_name=""  # Reset for each iteration
+echo
+echo "Step 3: Restoring Sites"
+echo "-----------------------"
 
-  if [[ -d "$WWW_DIR/$site" ]]; then
-    backup_name="${site}.pre-restore-$(date +%Y%m%d-%H%M%S)"
-    mv "$WWW_DIR/$site" "$WWW_DIR/$backup_name"
+for site in "${SELECTED_SITES[@]}"; do
+  backup_file="${SITE_BACKUPS[$site]}"
+  echo
+  echo "$LOG_PREFIX Restoring: $site"
+  echo "$LOG_PREFIX   Backup: $backup_file"
+
+  # Download backup
+  echo "$LOG_PREFIX   Downloading..."
+  if ! rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$backup_file" "$TEMP_DIR/" --progress; then
+    echo "$LOG_PREFIX   [ERROR] Download failed"
+    continue
   fi
 
-  if tar -xzf "$BACKUP_FILE" -C "$WWW_DIR" "$site" 2>/dev/null; then
-    echo "  Success"
-    # Only remove backup if we created one and restore succeeded
+  local_file="$TEMP_DIR/$backup_file"
+
+  # Verify checksum if available
+  checksum_file="${backup_file}.sha256"
+  if rclone copy "$RCLONE_REMOTE:$RCLONE_PATH/$checksum_file" "$TEMP_DIR/" 2>/dev/null; then
+    echo "$LOG_PREFIX   Verifying checksum..."
+    stored=$(cat "$TEMP_DIR/$checksum_file")
+    calculated=$(sha256sum "$local_file" | awk '{print $1}')
+    if [[ "$stored" == "$calculated" ]]; then
+      echo "$LOG_PREFIX   Checksum: OK"
+    else
+      echo "$LOG_PREFIX   [ERROR] Checksum mismatch!"
+      echo "$LOG_PREFIX     Expected: $stored"
+      echo "$LOG_PREFIX     Got:      $calculated"
+      read -p "  Continue with this backup anyway? (y/N): " continue_anyway
+      if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+        rm -f "$local_file" "$TEMP_DIR/$checksum_file"
+        continue
+      fi
+    fi
+    rm -f "$TEMP_DIR/$checksum_file"
+  else
+    echo "$LOG_PREFIX   [INFO] No checksum file found"
+  fi
+
+  # Get the actual directory name from inside the archive
+  dir_name=$(tar -tzf "$local_file" 2>/dev/null | head -1 | cut -d'/' -f1)
+  if [[ -z "$dir_name" ]]; then
+    echo "$LOG_PREFIX   [ERROR] Could not determine directory name from archive"
+    rm -f "$local_file"
+    continue
+  fi
+
+  echo "$LOG_PREFIX   Extracting to: $WWW_DIR/$dir_name"
+
+  # Backup existing directory if it exists
+  backup_name=""
+  if [[ -d "$WWW_DIR/$dir_name" ]]; then
+    backup_name="${dir_name}.pre-restore-$(date +%Y%m%d-%H%M%S)"
+    echo "$LOG_PREFIX   Backing up existing to: $backup_name"
+    mv "$WWW_DIR/$dir_name" "$WWW_DIR/$backup_name"
+  fi
+
+  # Extract
+  if tar -xzf "$local_file" -C "$WWW_DIR" 2>/dev/null; then
+    echo "$LOG_PREFIX   Success"
+    # Remove temp backup on success
     [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && rm -rf "$WWW_DIR/$backup_name"
   else
-    echo "  Failed"
+    echo "$LOG_PREFIX   [ERROR] Extraction failed"
     # Restore the backup if we made one
-    [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]] && mv "$WWW_DIR/$backup_name" "$WWW_DIR/$site"
+    if [[ -n "$backup_name" && -d "$WWW_DIR/$backup_name" ]]; then
+      mv "$WWW_DIR/$backup_name" "$WWW_DIR/$dir_name"
+      echo "$LOG_PREFIX   Restored original directory"
+    fi
   fi
+
+  rm -f "$local_file"
 done
 
 echo
-echo "Restore complete!"
+echo "========================================================"
+echo "           Restore Complete!"
+echo "========================================================"
 FILESRESTOREEOF
 
   sed -i \
