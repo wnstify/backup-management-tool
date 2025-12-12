@@ -33,13 +33,12 @@ if (mobileMenuBtn && navLinks) {
 }
 
 // Copy to clipboard functionality
-function copyToClipboard(elementId) {
+function copyToClipboard(elementId, btn) {
     const element = document.getElementById(elementId);
     const text = element.textContent;
 
     navigator.clipboard.writeText(text).then(() => {
         // Show feedback
-        const btn = element.parentElement.querySelector('.copy-btn');
         const originalHTML = btn.innerHTML;
         btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
         btn.style.color = '#4ade80';
@@ -53,8 +52,13 @@ function copyToClipboard(elementId) {
     });
 }
 
-// Make copyToClipboard globally available
-window.copyToClipboard = copyToClipboard;
+// Set up copy buttons using event listeners (CSP-compliant)
+document.querySelectorAll('.copy-btn[data-copy-target]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-copy-target');
+        copyToClipboard(targetId, btn);
+    });
+});
 
 // Format date
 function formatDate(dateString) {
