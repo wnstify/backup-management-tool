@@ -20,10 +20,11 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://webnestify.cloud/wp-content/uploads/2023/11/cropped-webnestify-fav-32x32.png">
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Self-hosted Fonts -->
+    <link rel="stylesheet" href="fonts/fonts.css">
+
+    <!-- Cloudflare Turnstile -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
@@ -384,6 +385,8 @@ Main Menu
                         <label for="message">Message</label>
                         <textarea id="message" name="message" rows="5" placeholder="How can we help you?" required></textarea>
                     </div>
+
+                    <div class="cf-turnstile" data-sitekey="0x4AAAAAACGRXwdpEbScyU5V" data-theme="dark"></div>
 
                     <button type="submit" class="btn btn-primary btn-submit">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
