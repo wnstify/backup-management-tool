@@ -29,6 +29,7 @@
 }
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
