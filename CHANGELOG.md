@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.1] - 2024-12-12
+
+### Fixed
+
+- **Critical: Script exits after banner** - Fixed `show_update_banner()` causing script to exit when no update available due to `set -euo pipefail`
+- **Missing updater.sh in installation** - Added `updater.sh` to `LIB_MODULES` array in `install.sh`
+
+### Technical
+
+- Added `|| true` after `check_for_updates_silent` command substitution to prevent exit on non-zero return
+- Changed `show_update_banner()` to always return 0 (display function, not a check)
+
+---
+
+## [1.6.0] - 2024-12-12
+
+### Changed
+
+- **Rebranding** - Updated from Webnestify to Backupd
+- **New Domain** - Website now at backupd.io
+- **Updated Copyright** - License and documentation updated to Backupd
+
+### Notes
+
+- Email addresses remain @webnestify.cloud for support continuity
+- No functional changes to backup/restore operations
+
+---
+
 ## [1.5.0] - 2024-12-12
 
 ### Added
