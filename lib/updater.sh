@@ -151,9 +151,8 @@ show_update_banner() {
     echo -e "${YELLOW}│  Select 'U' from menu or run: backup-management --update│${NC}"
     echo -e "${YELLOW}└────────────────────────────────────────────────────────┘${NC}"
     echo
-    return 0
   fi
-  return 1
+  return 0
 }
 
 # ---------- Update Execution Functions ----------
