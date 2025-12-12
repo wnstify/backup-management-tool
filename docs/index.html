@@ -20,8 +20,17 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://webnestify.cloud/wp-content/uploads/2023/11/cropped-webnestify-fav-32x32.png">
 
-    <!-- Self-hosted Fonts -->
-    <link rel="stylesheet" href="fonts/fonts.css">
+    <!-- Preconnect to critical origins -->
+    <link rel="preconnect" href="https://api.github.com" crossorigin>
+    <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
+
+    <!-- Preload critical fonts -->
+    <link rel="preload" href="fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/inter-semibold.woff2" as="font" type="font/woff2" crossorigin>
+
+    <!-- Self-hosted Fonts (non-blocking) -->
+    <link rel="preload" href="fonts/fonts.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="fonts/fonts.css"></noscript>
 
     <!-- Cloudflare Turnstile -->
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
