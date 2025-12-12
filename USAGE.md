@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.5.0** by Backupd.
+Complete usage documentation for **Backup Management Tool v1.6.2** by Backupd.
 
 ## Table of Contents
 
@@ -76,7 +76,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.5.0
+       Backup Management Tool v1.6.2
                     by Backupd
 ========================================================
 
@@ -108,7 +108,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.5.0
+       Backup Management Tool v1.6.2
                     by Backupd
 ========================================================
 
@@ -1091,7 +1091,7 @@ When a new version is available, you'll see a banner on startup:
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│  Update available: 1.5.0 → 1.5.1                        │
+│  Update available: 1.6.1 → 1.6.2                        │
 │  Select 'U' from menu or run: backup-management --update│
 └────────────────────────────────────────────────────────┘
 ```
@@ -1104,11 +1104,11 @@ Select **U** from the main menu:
 Update Backup Management Tool
 ==============================
 
-→ Current version: 1.5.0
+→ Current version: 1.6.1
 → Checking for updates...
-→ Latest version:  1.5.1
+→ Latest version:  1.6.2
 
-Update available: 1.5.0 → 1.5.1
+Update available: 1.6.1 → 1.6.2
 
 This will:
   - Download the new version from GitHub
@@ -1118,12 +1118,12 @@ This will:
 
 Proceed with update? [y/N]: y
 
-→ Downloading version 1.5.1...
+→ Downloading version 1.6.2...
 → Verifying checksum...
 ✓ Checksum verified
 ✓ Current version backed up to: /usr/local/backup-management.backup
 → Applying update...
-✓ Update complete! Version: 1.5.1
+✓ Update complete! Version: 1.6.2
 
 → Please restart the tool to use the new version.
 ```

@@ -454,6 +454,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.6.2 | 2024-12-12 | Fixed ntfy notifications and SIGPIPE in files verification |
+| 1.6.1 | 2024-12-12 | Fixed script exit after banner, missing updater.sh in install |
+| 1.6.0 | 2024-12-12 | Backupd rebranding, new domain backupd.io |
 | 1.5.0 | 2024-12-12 | Built-in auto-update system, CLI flags |
 | 1.4.2 | 2024-12-11 | Ploi panel support, configurable database username |
 | 1.4.1 | 2024-12-11 | Database restore verification prompt, safer restore process |

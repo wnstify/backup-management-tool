@@ -159,7 +159,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.5.0                ║
+║              Backup Management Tool v1.6.2                ║
 ║                       by Backupd                          ║
 ╚═══════════════════════════════════════════════════════════╝
 
