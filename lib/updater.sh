@@ -143,7 +143,7 @@ check_for_updates_silent() {
 # Show update banner if available
 show_update_banner() {
   local latest_version
-  latest_version=$(check_for_updates_silent)
+  latest_version=$(check_for_updates_silent) || true
 
   if [[ -n "$latest_version" ]]; then
     echo -e "${YELLOW}┌────────────────────────────────────────────────────────┐${NC}"
