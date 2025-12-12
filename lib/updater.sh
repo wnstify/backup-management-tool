@@ -435,3 +435,146 @@ check_for_updates_verbose() {
 
   press_enter_to_continue
 }
+
+# ---------- Development Branch Update ----------
+
+# GitHub raw content URL for branch-based updates
+GITHUB_RAW_URL="https://raw.githubusercontent.com/${GITHUB_REPO}"
+
+# Download file from GitHub branch
+download_from_branch() {
+  local branch="$1"
+  local file_path="$2"
+  local dest_path="$3"
+
+  local url="${GITHUB_RAW_URL}/${branch}/${file_path}"
+
+  if ! curl -sL --connect-timeout 10 "$url" -o "$dest_path" 2>/dev/null; then
+    return 1
+  fi
+
+  return 0
+}
+
+# Update from development branch (bypasses release system)
+do_dev_update() {
+  local branch="${1:-develop}"
+
+  print_header
+  echo "Development Branch Update"
+  echo "========================="
+  echo
+
+  print_warning "This updates from the '${branch}' branch directly."
+  print_warning "This is intended for testing only, NOT production use."
+  echo
+
+  print_info "Current version: ${VERSION}"
+  print_info "Target branch:   ${branch}"
+  echo
+
+  # Confirm update
+  echo "This will:"
+  echo "  - Download the latest code from '${branch}' branch"
+  echo "  - Backup your current installation"
+  echo "  - Replace script files (NOT your configuration)"
+  echo "  - Your settings and credentials will be preserved"
+  echo
+  read -p "Proceed with development update? [y/N]: " confirm
+
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Update cancelled."
+    return 0
+  fi
+
+  echo
+
+  # Create temp directory
+  local temp_dir
+  temp_dir=$(create_secure_temp "backup-mgmt-dev-update")
+
+  # List of files to download
+  local main_script="backup-management.sh"
+  local lib_files=(
+    "lib/core.sh"
+    "lib/crypto.sh"
+    "lib/config.sh"
+    "lib/generators.sh"
+    "lib/status.sh"
+    "lib/backup.sh"
+    "lib/verify.sh"
+    "lib/restore.sh"
+    "lib/schedule.sh"
+    "lib/setup.sh"
+    "lib/updater.sh"
+  )
+
+  # Download main script
+  print_info "Downloading ${main_script}..."
+  if ! download_from_branch "$branch" "$main_script" "${temp_dir}/${main_script}"; then
+    print_error "Failed to download ${main_script}"
+    rm -rf "$temp_dir"
+    press_enter_to_continue
+    return 1
+  fi
+
+  # Download lib files
+  mkdir -p "${temp_dir}/lib"
+  for lib_file in "${lib_files[@]}"; do
+    print_info "Downloading ${lib_file}..."
+    if ! download_from_branch "$branch" "$lib_file" "${temp_dir}/${lib_file}"; then
+      print_error "Failed to download ${lib_file}"
+      rm -rf "$temp_dir"
+      press_enter_to_continue
+      return 1
+    fi
+  done
+
+  print_success "All files downloaded"
+  echo
+
+  # Backup current version
+  backup_current_version
+
+  # Apply the update
+  print_info "Applying update..."
+
+  # Copy main script
+  cp "${temp_dir}/${main_script}" "${SCRIPT_DIR}/${main_script}"
+  chmod +x "${SCRIPT_DIR}/${main_script}"
+
+  # Copy lib files
+  for lib_file in "${lib_files[@]}"; do
+    cp "${temp_dir}/${lib_file}" "${SCRIPT_DIR}/${lib_file}"
+    chmod +x "${SCRIPT_DIR}/${lib_file}"
+  done
+
+  # Basic syntax check
+  if ! bash -n "${SCRIPT_DIR}/backup-management.sh" 2>/dev/null; then
+    print_error "Syntax error in updated script, rolling back..."
+    rollback_update
+    rm -rf "$temp_dir"
+    press_enter_to_continue
+    return 1
+  fi
+
+  # Cleanup
+  rm -rf "$temp_dir"
+
+  # Get new version from downloaded script
+  local new_version
+  new_version=$(grep '^VERSION=' "${SCRIPT_DIR}/backup-management.sh" 2>/dev/null | cut -d'"' -f2)
+
+  echo
+  print_success "Development update complete!"
+  print_info "Updated from branch: ${branch}"
+  print_info "New version: ${new_version:-unknown}"
+  echo
+  print_info "Please restart the tool to use the new version."
+  echo
+
+  press_enter_to_continue
+
+  # Exit to force restart with new version
+  exit 0
+}

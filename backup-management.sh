@@ -211,6 +211,7 @@ show_help() {
   echo "  --version, -v       Show version information"
   echo "  --update            Check for and install updates"
   echo "  --check-update      Check for updates (no install)"
+  echo "  --dev-update        Update from develop branch (testing only)"
   echo
   echo "Run without arguments to start the interactive menu."
 }
@@ -237,6 +238,10 @@ parse_arguments() {
       ;;
     --check-update)
       check_for_updates_verbose
+      exit $?
+      ;;
+    --dev-update)
+      do_dev_update "develop"
       exit $?
       ;;
     "")
