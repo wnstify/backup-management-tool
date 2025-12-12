@@ -2,7 +2,7 @@
 
 A secure, automated backup solution for web applications and MySQL/MariaDB databases with encrypted cloud storage. Supports multiple hosting panels and application types.
 
-**By [Webnestify](https://webnestify.cloud)**
+**By [Backupd](https://backupd.io)**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey.svg)
@@ -160,7 +160,7 @@ sudo backup-management
 ```
 ╔═══════════════════════════════════════════════════════════╗
 ║              Backup Management Tool v1.5.0                ║
-║                     by Webnestify                         ║
+║                       by Backupd                          ║
 ╚═══════════════════════════════════════════════════════════╝
 
 Main Menu
@@ -436,7 +436,7 @@ You'll be asked whether to keep or remove configuration and secrets.
 
 - 🐛 **Issues:** [GitHub Issues](https://github.com/wnstify/backup-management-tool/issues)
 - 📧 **Email:** support@webnestify.cloud
-- 🌐 **Website:** [webnestify.cloud](https://webnestify.cloud)
+- 🌐 **Website:** [backupd.io](https://backupd.io)
 
 ---
 
@@ -453,5 +453,5 @@ Contributions welcome! Please read the code of conduct and submit PRs to the `de
 ---
 
 <p align="center">
-  <strong>Built with ❤️ by <a href="https://webnestify.cloud">Webnestify</a></strong>
+  <strong>Built with ❤️ by <a href="https://backupd.io">Backupd</a></strong>
 </p>

@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.5.0** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.5.0** by Backupd.
 
 ## Table of Contents
 
@@ -77,7 +77,7 @@ On first run, you'll see the disclaimer and welcome screen:
 ```
 ========================================================
        Backup Management Tool v1.5.0
-                  by Webnestify
+                    by Backupd
 ========================================================
 
 ┌────────────────────────────────────────────────────────┐
@@ -109,7 +109,7 @@ After configuration, you'll see the main menu:
 ```
 ========================================================
        Backup Management Tool v1.5.0
-                  by Webnestify
+                    by Backupd
 ========================================================
 
 Main Menu
@@ -990,7 +990,7 @@ Recent Backup Activity:
   Last Files backup: 2025-01-15 03:00
 
 ───────────────────────────────────────────────────────
-  Webnestify | https://webnestify.cloud
+  Backupd | https://backupd.io
 ───────────────────────────────────────────────────────
 ```
 
@@ -1437,10 +1437,10 @@ rclone lsl remote:path/filename
 1. Check the logs in `/etc/backup-management/logs/`
 2. Run `rclone` commands manually to test
 3. Review [GitHub Issues](https://github.com/wnstify/backup-management-tool/issues)
-4. Contact support at [webnestify.cloud](https://webnestify.cloud)
+4. Contact support at [backupd.io](https://backupd.io)
 
 ---
 
 <p align="center">
-  <strong>Backup Management Tool</strong> by <a href="https://webnestify.cloud">Webnestify</a>
+  <strong>Backup Management Tool</strong> by <a href="https://backupd.io">Backupd</a>
 </p>

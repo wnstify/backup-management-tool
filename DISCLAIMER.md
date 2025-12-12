@@ -1,6 +1,6 @@
 # Disclaimer
 
-## Backup Management Tool by Webnestify
+## Backup Management Tool by Backupd
 
 **Last Updated:** January 2025
 
@@ -16,13 +16,13 @@ By downloading, installing, or using the Backup Management Tool ("the Software")
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
 
-IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, OR WEBNESTIFY BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, OR BACKUPD BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ---
 
 ## Limitation of Liability
 
-### The Author (Webnestify) is NOT responsible for:
+### The Author (Backupd) is NOT responsible for:
 
 1. **Data Loss**
    - Loss of databases, files, or any other data
@@ -139,7 +139,7 @@ This software relies on third-party tools and services:
 | ntfy.sh | ntfy project |
 | Cloud Storage | Your chosen provider |
 
-**Webnestify is not responsible for:**
+**Backupd is not responsible for:**
 - Bugs or vulnerabilities in third-party software
 - Changes to third-party APIs or services
 - Service outages of cloud storage providers
@@ -176,7 +176,7 @@ By using this software, you acknowledge and accept:
 
 1. You have read and understood this disclaimer
 2. You accept all risks associated with using this software
-3. You will not hold Webnestify liable for any damages
+3. You will not hold Backupd liable for any damages
 4. You are solely responsible for your data and backups
 5. You will take appropriate precautions as described above
 
@@ -186,7 +186,7 @@ By using this software, you acknowledge and accept:
 
 For questions about this disclaimer:
 
-- **Website:** [webnestify.cloud](https://webnestify.cloud)
+- **Website:** [backupd.io](https://backupd.io)
 - **GitHub:** [github.com/wnstify/backup-management-tool/](https://github.com/wnstify/backup-management-tool/)
 
 ---
@@ -199,6 +199,6 @@ This software is released under the MIT License. See the [LICENSE](LICENSE) file
 
 <p align="center">
   <strong>Backup Management Tool</strong><br>
-  Copyright © 2025 Webnestify<br>
-  <a href="https://webnestify.cloud">webnestify.cloud</a>
+  Copyright © 2025 Backupd<br>
+  <a href="https://backupd.io">backupd.io</a>
 </p>

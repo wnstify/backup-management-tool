@@ -426,5 +426,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 <p align="center">
-  <strong>Built with ❤️ by <a href="https://webnestify.cloud">Webnestify</a></strong>
+  <strong>Built with ❤️ by <a href="https://backupd.io">Backupd</a></strong>
 </p>

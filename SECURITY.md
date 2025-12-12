@@ -306,10 +306,10 @@ This tool is designed with security in mind but is provided "as is". Users are r
 
 - **Security Issues**: security@webnestify.cloud
 - **General Support**: support@webnestify.cloud
-- **Website**: [webnestify.cloud](https://webnestify.cloud)
+- **Website**: [backupd.io](https://backupd.io)
 
 ---
 
 <p align="center">
-  <strong>Built with security in mind by <a href="https://webnestify.cloud">Webnestify</a></strong>
+  <strong>Built with security in mind by <a href="https://backupd.io">Backupd</a></strong>
 </p>

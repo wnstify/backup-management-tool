@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Backup Management Tool - One-Line Installer
-# by Webnestify (https://webnestify.cloud)
+# by Backupd (https://backupd.io)
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash
@@ -47,7 +47,7 @@ print_banner() {
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║                                                           ║"
     echo "║        Backup Management Tool - Installer                 ║"
-    echo "║                  by Webnestify                            ║"
+    echo "║                    by Backupd                             ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"

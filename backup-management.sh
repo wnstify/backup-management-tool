@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Backup Management Tool by Webnestify
-# https://webnestify.cloud
+# Backup Management Tool by Backupd
+# https://backupd.io
 #
 # Comprehensive backup and restore solution for WordPress/MySQL environments
 # Supports: Database backups, Files backups, Remote storage via rclone
@@ -9,15 +9,15 @@
 #
 # DISCLAIMER:
 # This script is provided "as is" without warranty of any kind. The author
-# (Webnestify) is not responsible for any damages, data loss, or misuse
+# (Backupd) is not responsible for any damages, data loss, or misuse
 # arising from the use of this script. Always create a server snapshot
 # before running backup/restore operations. Use at your own risk.
 # ============================================================================
 set -euo pipefail
 
-VERSION="1.5.1"
-AUTHOR="Webnestify"
-WEBSITE="https://webnestify.cloud"
+VERSION="1.6.0"
+AUTHOR="Backupd"
+WEBSITE="https://backupd.io"
 INSTALL_DIR="/etc/backup-management"
 SCRIPTS_DIR="$INSTALL_DIR/scripts"
 CONFIG_FILE="$INSTALL_DIR/.config"
