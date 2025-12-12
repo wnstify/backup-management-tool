@@ -755,6 +755,15 @@ p {
   color: white;
   transform: translateY(-2px);
 }
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.animate-on-scroll--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
 @media (max-width: 1024px) {
   .container {
     padding: 0 16px;

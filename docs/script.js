@@ -239,7 +239,7 @@ window.addEventListener('scroll', () => {
     lastScroll = currentScroll;
 });
 
-// Intersection Observer for animations (BEM classes)
+// Intersection Observer for animations (using CSS classes to avoid forced reflow)
 const observerOptions = {
     threshold: 0.1,
     rootMargin: '0px 0px -50px 0px'
@@ -248,17 +248,14 @@ const observerOptions = {
 const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
+            entry.target.classList.add('animate-on-scroll--visible');
         }
     });
 }, observerOptions);
 
 // Observe feature cards and other animated elements (BEM classes)
 document.querySelectorAll('.card--feature, .step, .card--release').forEach(el => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(20px)';
-    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    el.classList.add('animate-on-scroll');
     observer.observe(el);
 });
 

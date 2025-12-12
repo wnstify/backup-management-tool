@@ -20,8 +20,10 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://webnestify.cloud/wp-content/uploads/2023/11/cropped-webnestify-fav-32x32.png">
 
-    <!-- Preconnect to critical origins -->
+    <!-- DNS Prefetch + Preconnect to critical origins -->
+    <link rel="dns-prefetch" href="https://api.github.com">
     <link rel="preconnect" href="https://api.github.com" crossorigin>
+    <link rel="dns-prefetch" href="https://challenges.cloudflare.com">
     <link rel="preconnect" href="https://challenges.cloudflare.com" crossorigin>
 
     <!-- Preload critical fonts -->
@@ -481,6 +483,6 @@ Main Menu
     </footer>
 
     <!-- Scripts -->
-    <script src="script.js"></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
