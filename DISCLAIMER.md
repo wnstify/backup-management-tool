@@ -91,7 +91,8 @@ IN NO EVENT SHALL THE AUTHORS, COPYRIGHT HOLDERS, OR WEBNESTIFY BE LIABLE FOR AN
 
 ### This Software:
 
-- Is designed for **Linux servers** with **WordPress/MySQL** environments
+- Is designed for **Linux servers** with **MySQL/MariaDB** database environments
+- Supports web applications (WordPress, Laravel, Node.js, PHP, static sites, etc.)
 - Requires **root access** and proper system configuration
 - Depends on **third-party tools** (rclone, gpg, mysql/mariadb, etc.)
 - May not be compatible with all server configurations

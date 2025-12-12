@@ -156,7 +156,7 @@ Step 1: Backup Type Selection
 -----------------------------
 What would you like to back up?
 1. Database only
-2. Files only (WordPress sites)
+2. Files only (web applications)
 3. Both Database and Files
 Select option [1-3]:
 ```
@@ -345,10 +345,10 @@ Select option [1-6]:
 **Database Backup:**
 ```
 ==== 2025-01-15 03:00:01 START per-db backup ====
-  → Dumping: wordpress_site1
-    OK: wordpress_site1
-  → Dumping: wordpress_site2
-    OK: wordpress_site2
+  → Dumping: myapp_production
+    OK: myapp_production
+  → Dumping: blog_database
+    OK: blog_database
 Archive verified.
 Generating checksum...
 Checksum: a1b2c3d4e5f6...
@@ -532,8 +532,8 @@ Enter encryption password: ********
 
 Archive contents:
 mysql-server1-db_backups-2025-01-15-0300/
-mysql-server1-db_backups-2025-01-15-0300/wordpress_site1-2025-01-15-0300.sql.gz
-mysql-server1-db_backups-2025-01-15-0300/wordpress_site2-2025-01-15-0300.sql.gz
+mysql-server1-db_backups-2025-01-15-0300/myapp_production-2025-01-15-0300.sql.gz
+mysql-server1-db_backups-2025-01-15-0300/blog_database-2025-01-15-0300.sql.gz
 ... (15 files total)
 
 ═══════════════════════════════════════
@@ -683,9 +683,9 @@ Select backup [1-5]:
 ```
 Step 3: Select Databases
 ------------------------
-   1) wordpress_site1
-   2) wordpress_site2
-   3) woocommerce_db
+   1) myapp_production
+   2) blog_database
+   3) ecommerce_db
   A) All databases
   Q) Quit
 
@@ -697,9 +697,9 @@ Selection: 1,2
 Restoring 2 database(s)...
 Confirm? (yes/no): yes
 
-Restoring: wordpress_site1
+Restoring: myapp_production
   ✓ Success
-Restoring: wordpress_site2
+Restoring: blog_database
   ✓ Success
 
 ========================================================
@@ -733,8 +733,8 @@ Done.
 Your response: N
 
 [DB-RESTORE] Site not working. Saving SQL files for manual recovery...
-[DB-RESTORE]   Saved: wordpress_site1-2025-01-15-0300.sql.gz
-[DB-RESTORE]   Saved: wordpress_site2-2025-01-15-0300.sql.gz
+[DB-RESTORE]   Saved: myapp_production-2025-01-15-0300.sql.gz
+[DB-RESTORE]   Saved: blog_database-2025-01-15-0300.sql.gz
 
 ========================================================
            SQL Files Saved
@@ -1436,7 +1436,7 @@ rclone lsl remote:path/filename
 
 1. Check the logs in `/etc/backup-management/logs/`
 2. Run `rclone` commands manually to test
-3. Review [GitHub Issues](https://github.com/webnestify/backup-management/issues)
+3. Review [GitHub Issues](https://github.com/wnstify/backup-management-tool/issues)
 4. Contact support at [webnestify.cloud](https://webnestify.cloud)
 
 ---

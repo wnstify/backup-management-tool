@@ -388,7 +388,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 - Database backup with GPG encryption
-- WordPress files backup with compression
+- Web application files backup with compression
 - Secure credential storage (AES-256, machine-bound)
 - Systemd timer scheduling
 - Interactive setup wizard
