@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.2] - 2024-12-12
+
+### Fixed
+
+- **Ntfy notifications missing Title header** - Added `-H "Title: $notification_title"` to curl commands in `lib/verify.sh`
+- **Files verification exits early** - Fixed SIGPIPE causing early exit during files backup verification due to `pipefail`
+
+### Technical
+
+- Added `|| true` to `tar|head` pipeline in files verification to prevent SIGPIPE exit
+- Files backups are not encrypted (by design) - only database backups use GPG encryption
+
+---
+
 ## [1.6.1] - 2024-12-12
 
 ### Fixed
