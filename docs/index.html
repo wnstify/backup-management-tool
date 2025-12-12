@@ -33,15 +33,15 @@
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
-            <a href="#" class="logo">
-                <img src="https://webnestify.cloud/wp-content/uploads/2023/11/webnestify-logo-dark-768x278.png" alt="Webnestify">
+            <a href="#" class="navbar__logo">
+                <img src="assets/wn-logo-dark.svg" alt="Webnestify">
             </a>
-            <button class="mobile-menu-btn" aria-label="Toggle menu">
+            <button class="navbar__menu-btn" aria-label="Toggle menu">
                 <span></span>
                 <span></span>
                 <span></span>
             </button>
-            <ul class="nav-links">
+            <ul class="navbar__links">
                 <li><a href="#features">Features</a></li>
                 <li><a href="#installation">Installation</a></li>
                 <li><a href="#changelog">Changelog</a></li>
@@ -54,15 +54,15 @@
     <!-- Hero Section -->
     <header class="hero">
         <div class="container">
-            <div class="hero-content">
-                <div class="version-badge" id="version-badge">
-                    <span class="badge-icon">&#9889;</span>
+            <div class="hero__content">
+                <div class="badge" id="version-badge">
+                    <span class="badge__icon">&#9889;</span>
                     <span id="latest-version">Loading...</span>
                 </div>
                 <h1>Backup Management Tool</h1>
-                <p class="hero-subtitle">A powerful, menu-driven backup solution for web applications and MySQL/MariaDB databases. Secure credential storage, remote cloud storage integration, and easy restoration.</p>
-                <div class="hero-buttons">
-                    <a href="#installation" class="btn btn-primary">
+                <p class="hero__subtitle">A powerful, menu-driven backup solution for web applications and MySQL/MariaDB databases. Secure credential storage, remote cloud storage integration, and easy restoration.</p>
+                <div class="hero__buttons">
+                    <a href="#installation" class="btn btn--primary">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
@@ -70,41 +70,41 @@
                         </svg>
                         Install Now
                     </a>
-                    <a href="https://github.com/wnstify/backup-management-tool" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                    <a href="https://github.com/wnstify/backup-management-tool" class="btn btn--secondary" target="_blank" rel="noopener noreferrer">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                         </svg>
                         View on GitHub
                     </a>
                 </div>
-                <div class="hero-stats">
+                <div class="hero__stats">
                     <div class="stat">
-                        <span class="stat-value">AES-256</span>
-                        <span class="stat-label">Encryption</span>
+                        <span class="stat__value">AES-256</span>
+                        <span class="stat__label">Encryption</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-value">11+</span>
-                        <span class="stat-label">Panels Supported</span>
+                        <span class="stat__value">11+</span>
+                        <span class="stat__label">Panels Supported</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-value">100%</span>
-                        <span class="stat-label">Open Source</span>
+                        <span class="stat__value">100%</span>
+                        <span class="stat__label">Open Source</span>
                     </div>
                 </div>
             </div>
-            <div class="hero-terminal">
-                <div class="terminal-header">
-                    <div class="terminal-buttons">
-                        <span class="terminal-btn red"></span>
-                        <span class="terminal-btn yellow"></span>
-                        <span class="terminal-btn green"></span>
+            <div class="terminal">
+                <div class="terminal__header">
+                    <div class="terminal__buttons">
+                        <span class="terminal__btn terminal__btn--red"></span>
+                        <span class="terminal__btn terminal__btn--yellow"></span>
+                        <span class="terminal__btn terminal__btn--green"></span>
                     </div>
-                    <span class="terminal-title">bash</span>
+                    <span class="terminal__title">bash</span>
                 </div>
-                <div class="terminal-body">
-                    <pre><code><span class="prompt">$</span> sudo backup-management
+                <div class="terminal__body">
+                    <pre><code><span class="terminal__prompt">$</span> sudo backup-management
 
-<span class="output">╔════════════════════════════════════════════════════════════╗
+<span class="terminal__output">╔════════════════════════════════════════════════════════════╗
 ║           Backup Management Tool v1.5.1                    ║
 ║           by Webnestify (https://webnestify.cloud)         ║
 ╚════════════════════════════════════════════════════════════╝</span>
@@ -123,7 +123,7 @@ Main Menu
   U. Update tool
   0. Exit
 
-<span class="prompt">Select option [1-7, U, 0]:</span> <span class="cursor">_</span></code></pre>
+<span class="terminal__prompt">Select option [1-7, U, 0]:</span> <span class="terminal__cursor">_</span></code></pre>
                 </div>
             </div>
         </div>
@@ -136,30 +136,30 @@ Main Menu
                 <h2>Features</h2>
                 <p>Everything you need for secure, automated backups</p>
             </div>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">
+            <div class="card-grid">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                         </svg>
                     </div>
-                    <h3>AES-256 Encryption</h3>
-                    <p>Military-grade encryption for all backups and credentials. Machine-bound keys ensure security even if files are copied.</p>
+                    <h3 class="card__title">AES-256 Encryption</h3>
+                    <p class="card__text">Military-grade encryption for all backups and credentials. Machine-bound keys ensure security even if files are copied.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
                             <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
                             <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
                         </svg>
                     </div>
-                    <h3>Database Backups</h3>
-                    <p>Automatic MySQL/MariaDB dumps with per-database archives. GPG encryption and compression included.</p>
+                    <h3 class="card__title">Database Backups</h3>
+                    <p class="card__text">Automatic MySQL/MariaDB dumps with per-database archives. GPG encryption and compression included.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
@@ -167,56 +167,56 @@ Main Menu
                             <line x1="16" y1="17" x2="8" y2="17"></line>
                         </svg>
                     </div>
-                    <h3>Files Backup</h3>
-                    <p>Complete web application backups with parallel compression. Supports WordPress, Laravel, Node.js, PHP, and static sites.</p>
+                    <h3 class="card__title">Files Backup</h3>
+                    <p class="card__text">Complete web application backups with parallel compression. Supports WordPress, Laravel, Node.js, PHP, and static sites.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
                         </svg>
                     </div>
-                    <h3>Cloud Storage</h3>
-                    <p>Upload to 40+ cloud providers via rclone. AWS S3, Backblaze B2, Google Drive, Dropbox, and more.</p>
+                    <h3 class="card__title">Cloud Storage</h3>
+                    <p class="card__text">Upload to 40+ cloud providers via rclone. AWS S3, Backblaze B2, Google Drive, Dropbox, and more.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <polyline points="12 6 12 12 16 14"></polyline>
                         </svg>
                     </div>
-                    <h3>Scheduled Backups</h3>
-                    <p>Systemd timers for reliable scheduling. Daily, weekly, or custom schedules with automatic retention cleanup.</p>
+                    <h3 class="card__title">Scheduled Backups</h3>
+                    <p class="card__text">Systemd timers for reliable scheduling. Daily, weekly, or custom schedules with automatic retention cleanup.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                         </svg>
                     </div>
-                    <h3>Push Notifications</h3>
-                    <p>Get notified via ntfy.sh on backup success, failure, or warnings. Never miss a backup issue again.</p>
+                    <h3 class="card__title">Push Notifications</h3>
+                    <p class="card__text">Get notified via ntfy.sh on backup success, failure, or warnings. Never miss a backup issue again.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="16 18 22 12 16 6"></polyline>
                             <polyline points="8 6 2 12 8 18"></polyline>
                         </svg>
                     </div>
-                    <h3>Multi-Panel Support</h3>
-                    <p>Auto-detects Enhance, xCloud, RunCloud, Ploi, cPanel, Plesk, CloudPanel, and more hosting panels.</p>
+                    <h3 class="card__title">Multi-Panel Support</h3>
+                    <p class="card__text">Auto-detects Enhance, xCloud, RunCloud, Ploi, cPanel, Plesk, CloudPanel, and more hosting panels.</p>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
+                <div class="card card--feature">
+                    <div class="card__icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
                         </svg>
                     </div>
-                    <h3>Easy Restore</h3>
-                    <p>Interactive restore wizard with verification prompts. Restore databases and files with confidence.</p>
+                    <h3 class="card__title">Easy Restore</h3>
+                    <p class="card__text">Interactive restore wizard with verification prompts. Restore databases and files with confidence.</p>
                 </div>
             </div>
         </div>
@@ -229,15 +229,15 @@ Main Menu
                 <h2>Installation</h2>
                 <p>Get started in seconds with our one-line installer</p>
             </div>
-            <div class="install-card">
-                <div class="install-step">
-                    <span class="step-number">1</span>
-                    <div class="step-content">
+            <div class="card card--install">
+                <div class="step">
+                    <span class="step__number">1</span>
+                    <div class="step__content">
                         <h3>Run the installer</h3>
                         <p>Execute this command as root on your Linux server:</p>
                         <div class="code-block">
-                            <code id="install-command">curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash</code>
-                            <button class="copy-btn" data-copy-target="install-command">
+                            <code class="code-block__code" id="install-command">curl -fsSL https://raw.githubusercontent.com/wnstify/backup-management-tool/main/install.sh | sudo bash</code>
+                            <button class="code-block__copy" data-copy-target="install-command">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -246,14 +246,14 @@ Main Menu
                         </div>
                     </div>
                 </div>
-                <div class="install-step">
-                    <span class="step-number">2</span>
-                    <div class="step-content">
+                <div class="step">
+                    <span class="step__number">2</span>
+                    <div class="step__content">
                         <h3>Run the setup wizard</h3>
                         <p>Launch the tool and follow the interactive setup:</p>
                         <div class="code-block">
-                            <code id="run-command">sudo backup-management</code>
-                            <button class="copy-btn" data-copy-target="run-command">
+                            <code class="code-block__code" id="run-command">sudo backup-management</code>
+                            <button class="code-block__copy" data-copy-target="run-command">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -262,9 +262,9 @@ Main Menu
                         </div>
                     </div>
                 </div>
-                <div class="install-step">
-                    <span class="step-number">3</span>
-                    <div class="step-content">
+                <div class="step">
+                    <span class="step__number">3</span>
+                    <div class="step__content">
                         <h3>Configure your backups</h3>
                         <p>The wizard will guide you through:</p>
                         <ul class="setup-list">
@@ -281,26 +281,26 @@ Main Menu
             </div>
             <div class="requirements">
                 <h3>Requirements</h3>
-                <div class="requirements-grid">
-                    <div class="requirement">
+                <div class="requirements__grid">
+                    <div class="requirements__item">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                         <span>Linux server (Ubuntu, Debian, CentOS, etc.)</span>
                     </div>
-                    <div class="requirement">
+                    <div class="requirements__item">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                         <span>Root access</span>
                     </div>
-                    <div class="requirement">
+                    <div class="requirements__item">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                         <span>MySQL or MariaDB (for database backups)</span>
                     </div>
-                    <div class="requirement">
+                    <div class="requirements__item">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
@@ -318,14 +318,14 @@ Main Menu
                 <h2>Release Notes</h2>
                 <p>Latest updates and improvements</p>
             </div>
-            <div class="changelog-content" id="changelog-content">
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
+            <div class="changelog__content" id="changelog-content">
+                <div class="spinner">
+                    <div class="spinner__icon"></div>
                     <p>Loading release notes...</p>
                 </div>
             </div>
-            <div class="changelog-footer">
-                <a href="https://github.com/wnstify/backup-management-tool/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+            <div class="changelog__footer">
+                <a href="https://github.com/wnstify/backup-management-tool/releases" class="btn btn--secondary" target="_blank" rel="noopener noreferrer">
                     View All Releases
                 </a>
             </div>
@@ -335,14 +335,14 @@ Main Menu
     <!-- Download Section -->
     <section id="download" class="download">
         <div class="container">
-            <div class="download-card">
-                <div class="download-info">
+            <div class="card card--download">
+                <div class="download__info">
                     <h2>Download Latest Release</h2>
                     <p id="download-version">Version loading...</p>
-                    <p id="download-date" class="download-date"></p>
+                    <p id="download-date" class="download__date"></p>
                 </div>
-                <div class="download-buttons">
-                    <a href="#" id="download-tar" class="btn btn-primary">
+                <div class="download__buttons">
+                    <a href="#" id="download-tar" class="btn btn--primary">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
@@ -350,7 +350,7 @@ Main Menu
                         </svg>
                         Download .tar.gz
                     </a>
-                    <a href="https://github.com/wnstify/backup-management-tool/releases" class="btn btn-outline" target="_blank" rel="noopener noreferrer">
+                    <a href="https://github.com/wnstify/backup-management-tool/releases" class="btn btn--outline" target="_blank" rel="noopener noreferrer">
                         View on GitHub
                     </a>
                 </div>
@@ -365,30 +365,30 @@ Main Menu
                 <h2>Get In Touch</h2>
                 <p>Have questions or feedback? We'd love to hear from you.</p>
             </div>
-            <div class="contact-card">
-                <form action="https://api.web3forms.com/submit" method="POST" class="contact-form">
+            <div class="card card--contact">
+                <form action="https://api.web3forms.com/submit" method="POST" class="form">
                     <input type="hidden" name="access_key" value="17826cda-7c1e-4313-8c0f-f45ecb6ca24b">
                     <input type="hidden" name="subject" value="Backup Management Tool - Contact Form">
                     <input type="hidden" name="from_name" value="Backup Tool Website">
 
-                    <div class="form-group">
-                        <label for="name">Name</label>
-                        <input type="text" id="name" name="name" placeholder="Your name" required>
+                    <div class="form__group">
+                        <label class="form__label" for="name">Name</label>
+                        <input class="form__input" type="text" id="name" name="name" placeholder="Your name" required>
                     </div>
 
-                    <div class="form-group">
-                        <label for="email">Email</label>
-                        <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                    <div class="form__group">
+                        <label class="form__label" for="email">Email</label>
+                        <input class="form__input" type="email" id="email" name="email" placeholder="your@email.com" required>
                     </div>
 
-                    <div class="form-group">
-                        <label for="message">Message</label>
-                        <textarea id="message" name="message" rows="5" placeholder="How can we help you?" required></textarea>
+                    <div class="form__group">
+                        <label class="form__label" for="message">Message</label>
+                        <textarea class="form__textarea" id="message" name="message" rows="5" placeholder="How can we help you?" required></textarea>
                     </div>
 
                     <div class="cf-turnstile" data-sitekey="0x4AAAAAACGRXwdpEbScyU5V" data-theme="dark"></div>
 
-                    <button type="submit" class="btn btn-primary btn-submit">
+                    <button type="submit" class="btn btn--primary btn--submit">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="22" y1="2" x2="11" y2="13"></line>
                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -403,13 +403,13 @@ Main Menu
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
-                    <img src="https://webnestify.cloud/wp-content/uploads/2023/11/webnestify-logo-dark-768x278.png" alt="Webnestify" class="footer-logo">
+            <div class="footer__content">
+                <div class="footer__brand">
+                    <img src="assets/wn-logo-dark.svg" alt="Webnestify" class="footer__logo">
                     <p>Secure backup solutions for web applications and databases.</p>
                 </div>
-                <div class="footer-links">
-                    <div class="footer-column">
+                <div class="footer__links">
+                    <div class="footer__column">
                         <h4>Product</h4>
                         <ul>
                             <li><a href="#features">Features</a></li>
@@ -418,7 +418,7 @@ Main Menu
                             <li><a href="https://github.com/wnstify/backup-management-tool/blob/main/USAGE.md" target="_blank" rel="noopener noreferrer">Documentation</a></li>
                         </ul>
                     </div>
-                    <div class="footer-column">
+                    <div class="footer__column">
                         <h4>Resources</h4>
                         <ul>
                             <li><a href="https://github.com/wnstify/backup-management-tool" target="_blank" rel="noopener noreferrer">GitHub</a></li>
@@ -427,7 +427,7 @@ Main Menu
                             <li><a href="https://github.com/wnstify/backup-management-tool/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a></li>
                         </ul>
                     </div>
-                    <div class="footer-column">
+                    <div class="footer__column">
                         <h4>Webnestify</h4>
                         <ul>
                             <li><a href="https://webnestify.cloud" target="_blank" rel="noopener noreferrer">Website</a></li>
@@ -436,25 +436,25 @@ Main Menu
                         </ul>
                     </div>
                 </div>
-                <div class="footer-social">
+                <div class="footer__social">
                     <h4>Connect With Us</h4>
-                    <div class="social-links">
-                        <a href="https://linkedin.com/company/webnestify" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                    <div class="social">
+                        <a href="https://linkedin.com/company/webnestify" class="social__link" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
                             </svg>
                         </a>
-                        <a href="https://youtube.com/@webnestify" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+                        <a href="https://youtube.com/@webnestify" class="social__link" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                             </svg>
                         </a>
-                        <a href="https://www.facebook.com/webnestify.cloud" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+                        <a href="https://www.facebook.com/webnestify.cloud" class="social__link" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                             </svg>
                         </a>
-                        <a href="https://www.trustpilot.com/review/webnestify.cloud" target="_blank" rel="noopener noreferrer" aria-label="Trustpilot">
+                        <a href="https://www.trustpilot.com/review/webnestify.cloud" class="social__link" target="_blank" rel="noopener noreferrer" aria-label="Trustpilot">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M12 0l3.09 9.52H24l-7.18 5.22 2.74 8.45L12 17.77l-7.56 5.42 2.74-8.45L0 9.52h8.91L12 0z"/>
                             </svg>
@@ -462,10 +462,10 @@ Main Menu
                     </div>
                 </div>
             </div>
-            <div class="footer-about">
+            <div class="footer__about">
                 <p>Webnestify is a digital cloud solutions company specializing in bespoke services and strategic agency partnerships. We deliver personalized solutions tailored to meet the unique needs of each client.</p>
             </div>
-            <div class="footer-bottom">
+            <div class="footer__bottom">
                 <p>&copy; 2025 Webnestify. Released under the MIT License.</p>
             </div>
         </div>

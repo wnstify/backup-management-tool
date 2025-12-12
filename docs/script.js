@@ -13,21 +13,21 @@ const downloadVersion = document.getElementById('download-version');
 const downloadDate = document.getElementById('download-date');
 const downloadTarBtn = document.getElementById('download-tar');
 
-// Mobile menu toggle
-const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
-const navLinks = document.querySelector('.nav-links');
+// Mobile menu toggle (BEM classes)
+const mobileMenuBtn = document.querySelector('.navbar__menu-btn');
+const navLinks = document.querySelector('.navbar__links');
 
 if (mobileMenuBtn && navLinks) {
     mobileMenuBtn.addEventListener('click', () => {
-        navLinks.classList.toggle('active');
-        mobileMenuBtn.classList.toggle('active');
+        navLinks.classList.toggle('navbar__links--active');
+        mobileMenuBtn.classList.toggle('navbar__menu-btn--active');
     });
 
     // Close menu when clicking a link
     navLinks.querySelectorAll('a').forEach(link => {
         link.addEventListener('click', () => {
-            navLinks.classList.remove('active');
-            mobileMenuBtn.classList.remove('active');
+            navLinks.classList.remove('navbar__links--active');
+            mobileMenuBtn.classList.remove('navbar__menu-btn--active');
         });
     });
 }
@@ -52,8 +52,8 @@ function copyToClipboard(elementId, btn) {
     });
 }
 
-// Set up copy buttons using event listeners (CSP-compliant)
-document.querySelectorAll('.copy-btn[data-copy-target]').forEach(btn => {
+// Set up copy buttons using event listeners (CSP-compliant, BEM classes)
+document.querySelectorAll('.code-block__copy[data-copy-target]').forEach(btn => {
     btn.addEventListener('click', () => {
         const targetId = btn.getAttribute('data-copy-target');
         copyToClipboard(targetId, btn);
@@ -106,21 +106,21 @@ function parseReleaseBody(body) {
     return html;
 }
 
-// Create release card HTML
+// Create release card HTML (BEM classes)
 function createReleaseCard(release, isLatest = false) {
     const card = document.createElement('div');
-    card.className = 'release-card';
-    if (isLatest) card.classList.add('latest');
+    card.className = 'card card--release';
+    if (isLatest) card.classList.add('card--release-latest');
 
     // Sanitize tag_name to prevent XSS
     const safeTagName = escapeHtml(release.tag_name);
 
     card.innerHTML = `
-        <div class="release-header">
-            <span class="release-version">${safeTagName}${isLatest ? ' (Latest)' : ''}</span>
-            <span class="release-date">${formatDate(release.published_at)}</span>
+        <div class="release__header">
+            <span class="release__version">${safeTagName}${isLatest ? ' (Latest)' : ''}</span>
+            <span class="release__date">${formatDate(release.published_at)}</span>
         </div>
-        <div class="release-body">
+        <div class="release__body">
             ${parseReleaseBody(release.body)}
         </div>
     `;
@@ -191,7 +191,7 @@ async function fetchReleases() {
 
         // Show error message
         changelogContent.innerHTML = `
-            <div class="release-card">
+            <div class="card card--release">
                 <p>Unable to load release notes. Please check the <a href="https://github.com/${GITHUB_REPO}/releases" target="_blank" rel="noopener noreferrer">GitHub releases page</a>.</p>
             </div>
         `;
@@ -239,7 +239,7 @@ window.addEventListener('scroll', () => {
     lastScroll = currentScroll;
 });
 
-// Intersection Observer for animations
+// Intersection Observer for animations (BEM classes)
 const observerOptions = {
     threshold: 0.1,
     rootMargin: '0px 0px -50px 0px'
@@ -254,8 +254,8 @@ const observer = new IntersectionObserver((entries) => {
     });
 }, observerOptions);
 
-// Observe feature cards and other animated elements
-document.querySelectorAll('.feature-card, .install-step, .release-card').forEach(el => {
+// Observe feature cards and other animated elements (BEM classes)
+document.querySelectorAll('.card--feature, .step, .card--release').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
     el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
