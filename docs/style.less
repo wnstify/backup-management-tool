@@ -476,7 +476,8 @@ p {
 
 .installation,
 .download,
-.contact {
+.contact,
+.security {
     padding: 120px 0;
 }
 
@@ -960,6 +961,171 @@ p {
 }
 
 // ==========================================================================
+// SECURITY SECTION (.security)
+// ==========================================================================
+
+.security {
+    &__content {
+        display: flex;
+        flex-direction: column;
+        gap: @spacing-xl;
+    }
+
+    &__main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: @spacing-xl;
+    }
+
+    &__encryption {
+        background: @bg-secondary;
+        border-radius: @radius-lg;
+        padding: @spacing-xl;
+        border: 1px solid @border-color;
+
+        h3 {
+            margin-bottom: @spacing-lg;
+            font-size: 1.25rem;
+        }
+    }
+
+    &__diagram {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: @spacing-md;
+        flex-wrap: wrap;
+    }
+
+    &__step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: @spacing-xs;
+    }
+
+    &__step-icon {
+        width: 56px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: @bg-primary;
+        border-radius: @radius;
+        color: @text-secondary;
+        border: 1px solid @border-color;
+    }
+
+    &__step--highlight &__step-icon {
+        background: @accent;
+        color: white;
+        border-color: @accent;
+        box-shadow: 0 0 20px @accent-glow;
+    }
+
+    &__step-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: @text-primary;
+    }
+
+    &__step-desc {
+        font-size: 0.75rem;
+        color: @text-muted;
+    }
+
+    &__arrow {
+        font-size: 1.5rem;
+        color: @text-muted;
+        font-weight: 300;
+    }
+
+    &__details {
+        display: flex;
+        flex-direction: column;
+        gap: @spacing-md;
+    }
+
+    &__detail {
+        background: @bg-secondary;
+        border-radius: @radius;
+        padding: @spacing-lg;
+        border: 1px solid @border-color;
+
+        h4 {
+            font-size: 1rem;
+            margin-bottom: @spacing-sm;
+            color: @accent;
+        }
+    }
+
+    &__list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+
+        li {
+            padding: @spacing-xs 0;
+            color: @text-secondary;
+            font-size: 0.9rem;
+            border-bottom: 1px solid @border-color;
+
+            &:last-child {
+                border-bottom: none;
+            }
+
+            strong {
+                color: @text-primary;
+            }
+        }
+    }
+
+    &__threats {
+        background: @bg-secondary;
+        border-radius: @radius-lg;
+        padding: @spacing-xl;
+        border: 1px solid @border-color;
+
+        h3 {
+            margin-bottom: @spacing-lg;
+            font-size: 1.25rem;
+            text-align: center;
+        }
+    }
+
+    &__grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: @spacing-sm;
+    }
+
+    &__item {
+        display: flex;
+        align-items: center;
+        gap: @spacing-xs;
+        padding: @spacing-sm;
+        background: @bg-primary;
+        border-radius: @radius-sm;
+        font-size: 0.875rem;
+        color: @text-secondary;
+        border: 1px solid @border-color;
+
+        svg {
+            flex-shrink: 0;
+        }
+
+        &--protected svg {
+            color: @success;
+        }
+
+        &--partial svg {
+            color: @warning;
+        }
+    }
+}
+
+// ==========================================================================
 // ANIMATIONS
 // ==========================================================================
 
@@ -1018,8 +1184,19 @@ p {
     .changelog,
     .installation,
     .download,
-    .contact {
+    .contact,
+    .security {
         padding: clamp(60px, 10vw, 120px) 0;
+    }
+
+    .security {
+        &__main {
+            grid-template-columns: 1fr;
+        }
+
+        &__grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
     }
 
     .section-header {
@@ -1116,6 +1293,27 @@ p {
 
         &__grid {
             grid-template-columns: 1fr;
+        }
+    }
+
+    .security {
+        &__encryption,
+        &__threats,
+        &__detail {
+            padding: @spacing-md;
+        }
+
+        &__grid {
+            grid-template-columns: 1fr;
+        }
+
+        &__diagram {
+            gap: @spacing-sm;
+        }
+
+        &__step-icon {
+            width: 48px;
+            height: 48px;
         }
     }
 
