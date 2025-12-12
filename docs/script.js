@@ -12,7 +12,6 @@ const changelogContent = document.getElementById('changelog-content');
 const downloadVersion = document.getElementById('download-version');
 const downloadDate = document.getElementById('download-date');
 const downloadTarBtn = document.getElementById('download-tar');
-const terminalVersion = document.getElementById('terminal-version');
 
 // Mobile menu toggle (BEM classes)
 const mobileMenuBtn = document.querySelector('.navbar__menu-btn');
@@ -150,11 +149,6 @@ async function fetchReleases() {
 
         // Update version badge (textContent is safe, auto-escapes)
         versionBadge.textContent = `Latest: ${latestRelease.tag_name}`;
-
-        // Update terminal version
-        if (terminalVersion) {
-            terminalVersion.textContent = latestRelease.tag_name;
-        }
 
         // Update download section (textContent is safe, auto-escapes)
         downloadVersion.textContent = `Version ${latestRelease.tag_name}`;
