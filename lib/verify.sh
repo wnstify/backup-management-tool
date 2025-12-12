@@ -176,12 +176,12 @@ verify_backup_integrity() {
           if tar -tzf "$temp_dir/$latest_files" >/dev/null 2>&1; then
             print_success "Archive verified"
 
-            # List contents
+            # List contents (|| true to prevent SIGPIPE exit with pipefail)
             echo
             echo "Archive contents:"
-            tar -tzf "$temp_dir/$latest_files" 2>/dev/null | head -20
+            tar -tzf "$temp_dir/$latest_files" 2>/dev/null | head -20 || true
             local file_count
-            file_count=$(tar -tzf "$temp_dir/$latest_files" 2>/dev/null | wc -l)
+            file_count=$(tar -tzf "$temp_dir/$latest_files" 2>/dev/null | wc -l) || file_count=0
             echo "... ($file_count files total)"
 
             files_result="PASSED"
