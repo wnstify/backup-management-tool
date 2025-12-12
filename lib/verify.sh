@@ -236,9 +236,9 @@ verify_backup_integrity() {
     fi
 
     if [[ -n "$ntfy_token" ]]; then
-      curl -s -H "Authorization: Bearer $ntfy_token" -d "$notification_body" "$ntfy_url" -o /dev/null --max-time 10 || true
+      curl -s -H "Authorization: Bearer $ntfy_token" -H "Title: $notification_title" -d "$notification_body" "$ntfy_url" -o /dev/null --max-time 10 || true
     else
-      curl -s -d "$notification_body" "$ntfy_url" -o /dev/null --max-time 10 || true
+      curl -s -H "Title: $notification_title" -d "$notification_body" "$ntfy_url" -o /dev/null --max-time 10 || true
     fi
   fi
 
