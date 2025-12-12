@@ -32,6 +32,7 @@ LIB_MODULES=(
     "restore.sh"
     "schedule.sh"
     "setup.sh"
+    "updater.sh"
 )
 
 # Colors
