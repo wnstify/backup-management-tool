@@ -15,7 +15,7 @@
 # ============================================================================
 set -euo pipefail
 
-VERSION="1.4.2"
+VERSION="1.5.0"
 AUTHOR="Webnestify"
 WEBSITE="https://webnestify.cloud"
 INSTALL_DIR="/etc/backup-management"
@@ -57,6 +57,7 @@ source "$LIB_DIR/verify.sh"     # Backup integrity verification
 source "$LIB_DIR/restore.sh"    # Restore execution
 source "$LIB_DIR/schedule.sh"   # Schedule management
 source "$LIB_DIR/setup.sh"      # Setup wizard
+source "$LIB_DIR/updater.sh"    # Auto-update functionality
 
 # ---------- Install Command ----------
 
@@ -145,6 +146,9 @@ main_menu() {
   while true; do
     print_header
 
+    # Show update banner if available (silent check)
+    show_update_banner
+
     if is_configured; then
       echo "Main Menu"
       echo "========="
@@ -156,9 +160,11 @@ main_menu() {
       echo "  5. Manage schedules"
       echo "  6. Reconfigure"
       echo "  7. Uninstall"
-      echo "  8. Exit"
       echo
-      read -p "Select option [1-8]: " choice
+      echo "  U. Update tool"
+      echo "  0. Exit"
+      echo
+      read -p "Select option [1-7, U, 0]: " choice
 
       case "$choice" in
         1) run_backup ;;
@@ -168,7 +174,8 @@ main_menu() {
         5) manage_schedules ;;
         6) run_setup ;;
         7) uninstall_tool ;;
-        8) exit 0 ;;
+        [Uu]) do_update ;;
+        0) exit 0 ;;
         *) print_error "Invalid option" ; sleep 1 ;;
       esac
     else
@@ -176,26 +183,91 @@ main_menu() {
       echo "Welcome! This tool needs to be configured first."
       echo
       echo "  1. Run setup wizard"
-      echo "  2. Exit"
+      echo "  U. Update tool"
+      echo "  0. Exit"
       echo
-      read -p "Select option [1-2]: " choice
+      read -p "Select option [1, U, 0]: " choice
 
       case "$choice" in
         1) run_setup ;;
-        2) exit 0 ;;
+        [Uu]) do_update ;;
+        0) exit 0 ;;
         *) print_error "Invalid option" ; sleep 1 ;;
       esac
     fi
   done
 }
 
+# ---------- CLI Arguments ----------
+
+show_help() {
+  echo "Backup Management Tool v${VERSION}"
+  echo "by ${AUTHOR} (${WEBSITE})"
+  echo
+  echo "Usage: backup-management [OPTIONS]"
+  echo
+  echo "Options:"
+  echo "  --help, -h          Show this help message"
+  echo "  --version, -v       Show version information"
+  echo "  --update            Check for and install updates"
+  echo "  --check-update      Check for updates (no install)"
+  echo
+  echo "Run without arguments to start the interactive menu."
+}
+
+show_version() {
+  echo "Backup Management Tool v${VERSION}"
+  echo "by ${AUTHOR}"
+  echo "${WEBSITE}"
+}
+
+parse_arguments() {
+  case "${1:-}" in
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    --version|-v)
+      show_version
+      exit 0
+      ;;
+    --update)
+      do_update
+      exit $?
+      ;;
+    --check-update)
+      check_for_updates_verbose
+      exit $?
+      ;;
+    "")
+      # No arguments, continue to menu
+      return 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information."
+      exit 1
+      ;;
+  esac
+}
+
 # ---------- Entry Point ----------
 
-# Check if running as root
+# Parse CLI arguments first (some don't require root)
+case "${1:-}" in
+  --help|-h|--version|-v)
+    parse_arguments "$@"
+    ;;
+esac
+
+# Check if running as root (required for most operations)
 if [[ $EUID -ne 0 ]]; then
   echo "This tool must be run as root."
   exit 1
 fi
+
+# Parse remaining arguments that require root
+parse_arguments "$@"
 
 # Create install directory if needed
 mkdir -p "$INSTALL_DIR"

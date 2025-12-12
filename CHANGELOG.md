@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2024-12-12
+
+### Added
+
+- **Built-in Auto-Update System**
+  - New `lib/updater.sh` module for update functionality
+  - Checks GitHub releases API for latest version
+  - One-click update from menu (press `U`) or command line (`--update`)
+  - Silent version check on startup (once per 24 hours)
+  - Update banner shown when new version available
+  - SHA256 checksum verification of downloaded releases
+  - Automatic backup of current installation before update
+  - Automatic rollback if update fails
+  - Previous version kept at `{install_dir}.backup`
+
+- **New CLI Flags**
+  - `--help, -h` - Show help message
+  - `--version, -v` - Show version information
+  - `--update` - Check for and install updates
+  - `--check-update` - Check for updates without installing
+
+### Changed
+
+- **Main Menu**
+  - Added `U) Update tool` option
+  - Changed exit from `8` to `0` for consistency
+  - Update banner displays at top when update available
+
+- **Unconfigured Menu**
+  - Added `U) Update tool` option (can update before setup)
+  - Changed exit from `2` to `0`
+
+### Technical
+
+- Version comparison uses semantic versioning
+- Update check results cached for 24 hours in `/tmp/.backup-mgmt-update-check`
+- Downloads from GitHub releases: `https://github.com/wnstify/backup-management-tool/releases`
+- Expects release archives named `backup-management-v{version}.tar.gz`
+- Expects checksums in `SHA256SUMS` file alongside release
+
+---
+
 ## [1.4.2] - 2024-12-11
 
 ### Added
@@ -369,6 +411,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.5.0 | 2024-12-12 | Built-in auto-update system, CLI flags |
 | 1.4.2 | 2024-12-11 | Ploi panel support, configurable database username |
 | 1.4.1 | 2024-12-11 | Database restore verification prompt, safer restore process |
 | 1.4.0 | 2024-12-11 | Multi-panel support, multi-app backup, smart site naming |

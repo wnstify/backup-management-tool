@@ -1,6 +1,6 @@
 # Usage Guide
 
-Complete usage documentation for **Backup Management Tool v1.4.2** by Webnestify.
+Complete usage documentation for **Backup Management Tool v1.5.0** by Webnestify.
 
 ## Table of Contents
 
@@ -15,6 +15,7 @@ Complete usage documentation for **Backup Management Tool v1.4.2** by Webnestify
 - [Managing Schedules](#managing-schedules)
 - [Viewing Status & Logs](#viewing-status--logs)
 - [Notifications](#notifications)
+- [Updating the Tool](#updating-the-tool)
 - [Command Line Usage](#command-line-usage)
 - [Advanced Configuration](#advanced-configuration)
 - [Best Practices](#best-practices)
@@ -75,7 +76,7 @@ On first run, you'll see the disclaimer and welcome screen:
 
 ```
 ========================================================
-       Backup Management Tool v1.4.2
+       Backup Management Tool v1.5.0
                   by Webnestify
 ========================================================
 
@@ -91,9 +92,10 @@ On first run, you'll see the disclaimer and welcome screen:
 Welcome! This tool needs to be configured first.
 
   1. Run setup wizard
-  2. Exit
+  U. Update tool
+  0. Exit
 
-Select option [1-2]:
+Select option [1, U, 0]:
 ```
 
 Select **1** to begin the setup wizard.
@@ -106,7 +108,7 @@ After configuration, you'll see the main menu:
 
 ```
 ========================================================
-       Backup Management Tool v1.4.2
+       Backup Management Tool v1.5.0
                   by Webnestify
 ========================================================
 
@@ -120,9 +122,11 @@ Main Menu
   5. Manage schedules
   6. Reconfigure
   7. Uninstall
-  8. Exit
 
-Select option [1-8]:
+  U. Update tool
+  0. Exit
+
+Select option [1-7, U, 0]:
 ```
 
 ### Menu Options
@@ -136,7 +140,8 @@ Select option [1-8]:
 | **5. Manage schedules** | Add, modify, or disable backup schedules |
 | **6. Reconfigure** | Run the setup wizard again |
 | **7. Uninstall** | Remove the tool completely |
-| **8. Exit** | Exit the application |
+| **U. Update tool** | Check for and install updates from GitHub |
+| **0. Exit** | Exit the application |
 
 ---
 
@@ -1076,6 +1081,90 @@ You should receive a notification on your subscribed devices.
 
 ---
 
+## Updating the Tool
+
+The tool includes a built-in update system that checks for new versions from GitHub releases.
+
+### Update Banner
+
+When a new version is available, you'll see a banner on startup:
+
+```
+┌────────────────────────────────────────────────────────┐
+│  Update available: 1.5.0 → 1.5.1                        │
+│  Select 'U' from menu or run: backup-management --update│
+└────────────────────────────────────────────────────────┘
+```
+
+### Updating via Menu
+
+Select **U** from the main menu:
+
+```
+Update Backup Management Tool
+==============================
+
+→ Current version: 1.5.0
+→ Checking for updates...
+→ Latest version:  1.5.1
+
+Update available: 1.5.0 → 1.5.1
+
+This will:
+  - Download the new version from GitHub
+  - Backup your current installation
+  - Replace script files (NOT your configuration)
+  - Your settings and credentials will be preserved
+
+Proceed with update? [y/N]: y
+
+→ Downloading version 1.5.1...
+→ Verifying checksum...
+✓ Checksum verified
+✓ Current version backed up to: /usr/local/backup-management.backup
+→ Applying update...
+✓ Update complete! Version: 1.5.1
+
+→ Please restart the tool to use the new version.
+```
+
+### Updating via Command Line
+
+```bash
+# Check for updates and install
+sudo backup-management --update
+
+# Check for updates only (no install)
+sudo backup-management --check-update
+```
+
+### What Gets Updated
+
+| Component | Updated? | Notes |
+|-----------|----------|-------|
+| Script files | ✅ Yes | New code/features |
+| Library modules | ✅ Yes | `lib/*.sh` files |
+| Your configuration | ❌ No | `/etc/.{random}/` preserved |
+| Encrypted credentials | ❌ No | Safe and untouched |
+| Cron jobs/timers | ❌ No | Your schedules preserved |
+| rclone config | ❌ No | Cloud storage settings preserved |
+
+### Rollback
+
+If an update fails, the tool automatically rolls back to the previous version. A backup of your previous installation is kept at:
+
+```
+/usr/local/backup-management.backup
+```
+
+### Update Check Frequency
+
+- Updates are checked once per 24 hours (cached)
+- Silent check on startup (non-blocking)
+- No automatic updates - always requires user confirmation
+
+---
+
 ## Command Line Usage
 
 ### Basic Commands
@@ -1086,6 +1175,18 @@ backup-management
 
 # The tool must be run as root
 sudo backup-management
+
+# Show help
+backup-management --help
+
+# Show version
+backup-management --version
+
+# Check for and install updates
+sudo backup-management --update
+
+# Check for updates only
+sudo backup-management --check-update
 ```
 
 ### Direct Script Access

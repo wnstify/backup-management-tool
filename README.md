@@ -66,6 +66,7 @@ This tool provides exactly that.
 - 🔔 **Notifications** — Optional alerts via ntfy.sh on backup completion/failure
 - 🔄 **Easy Restore** — Interactive restore wizard with safety backups and checksum verification
 - 📋 **Detailed Logging** — Full logs with timestamps and automatic log rotation
+- 🔄 **Auto-Update** — Built-in update system with version checking and one-click updates
 
 ---
 
@@ -113,7 +114,8 @@ That's it! The wizard will guide you through configuration.
 │   ├── verify.sh             # Integrity verification
 │   ├── restore.sh            # Restore execution
 │   ├── schedule.sh           # Schedule management
-│   └── setup.sh              # Setup wizard
+│   ├── setup.sh              # Setup wizard
+│   └── updater.sh            # Auto-update functionality
 ├── .config                   # Configuration (retention, paths, etc.)
 ├── scripts/
 │   ├── db_backup.sh          # Database backup script
@@ -157,7 +159,7 @@ sudo backup-management
 
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              Backup Management Tool v1.4.2                ║
+║              Backup Management Tool v1.5.0                ║
 ║                     by Webnestify                         ║
 ╚═══════════════════════════════════════════════════════════╝
 
@@ -171,7 +173,9 @@ Main Menu
   5. Manage schedules
   6. Reconfigure
   7. Uninstall
-  8. Exit
+
+  U. Update tool
+  0. Exit
 ```
 
 ### Manual Backup Triggers

@@ -292,6 +292,7 @@ This tool is designed with security in mind but is provided "as is". Users are r
 
 | Version | Security Changes |
 |---------|-----------------|
+| 1.5.0 | Secure update system with SHA256 checksum verification of releases |
 | 1.4.2 | Configurable database username (reduced privilege support) |
 | 1.4.1 | Database restore verification prompt (prevents accidental data loss) |
 | 1.2.0 | SHA256 checksums, integrity verification |
