@@ -150,13 +150,26 @@ async function fetchReleases() {
         downloadVersion.textContent = `Version ${latestRelease.tag_name}`;
         downloadDate.textContent = `Released on ${formatDate(latestRelease.published_at)}`;
 
-        // Find tar.gz asset
+        // Find tar.gz asset and validate URL
         const tarAsset = latestRelease.assets.find(asset => asset.name.endsWith('.tar.gz'));
-        if (tarAsset) {
-            downloadTarBtn.href = tarAsset.browser_download_url;
+        if (tarAsset && tarAsset.browser_download_url) {
+            // Validate URL is from GitHub
+            const url = new URL(tarAsset.browser_download_url);
+            if (url.hostname === 'github.com' || url.hostname.endsWith('.githubusercontent.com')) {
+                downloadTarBtn.href = tarAsset.browser_download_url;
+            } else {
+                downloadTarBtn.href = `https://github.com/${GITHUB_REPO}/releases/latest`;
+            }
+        } else if (latestRelease.tarball_url) {
+            // Validate tarball URL is from GitHub
+            const url = new URL(latestRelease.tarball_url);
+            if (url.hostname === 'api.github.com' || url.hostname === 'github.com') {
+                downloadTarBtn.href = latestRelease.tarball_url;
+            } else {
+                downloadTarBtn.href = `https://github.com/${GITHUB_REPO}/releases/latest`;
+            }
         } else {
-            // Fallback to tarball URL
-            downloadTarBtn.href = latestRelease.tarball_url;
+            downloadTarBtn.href = `https://github.com/${GITHUB_REPO}/releases/latest`;
         }
 
         // Clear loading spinner
